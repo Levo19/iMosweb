@@ -2,7 +2,7 @@
 // LEVO - SISTEMA DE PEDIDOS
 // ============================================
 
-const APPS_SCRIPT_URL = 'TU_URL_DE_APPS_SCRIPT_AQUI';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxCSdcwutTIa6l8AASdXjKc7aaDOEAp9zU4oULq2v4yyaQjWtGjPu6LOYTsMjUFyIKH/exec';
 
 let currentUser = null;
 let sessionTimeout = null;
