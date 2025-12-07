@@ -620,24 +620,10 @@
         // Configurar búsqueda
         function setupSearch() {
             const searchInput = document.getElementById('searchInput');
-            let searchTimeout;
             
             searchInput.addEventListener('input', (e) => {
-                const query = e.target.value.toLowerCase().trim();
-                
-                // Debounce para mejor rendimiento (espera 150ms después de escribir)
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    filterProducts(query);
-                }, 150);
-            });
-            
-            // También filtrar inmediatamente si es muy corto
-            searchInput.addEventListener('input', (e) => {
-                const query = e.target.value.toLowerCase().trim();
-                if (query.length <= 2) {
-                    filterProducts(query);
-                }
+                const query = e.target.value.trim();
+                filterProducts(query);
             });
         }
 
@@ -648,24 +634,26 @@
                 return;
             }
 
+            // Normalizar texto (quitar acentos para búsqueda flexible)
+            const normalize = (str) => {
+                if (!str) return '';
+                return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+            };
+
+            const queryNorm = normalize(query);
+
             const filtered = allProducts.filter(p => {
-                // Normalizar texto (quitar acentos para búsqueda flexible)
-                const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-                
                 const nombreNorm = normalize(p.nombre);
                 const codigoNorm = normalize(p.codigo);
-                const descripcionNorm = p.descripcion ? normalize(p.descripcion) : '';
-                const queryNorm = normalize(query);
+                const descripcionNorm = normalize(p.descripcion);
                 
                 // Búsqueda básica: contiene la query
-                const basicMatch = nombreNorm.includes(queryNorm) || 
-                                   codigoNorm.includes(queryNorm) ||
-                                   descripcionNorm.includes(queryNorm);
-                
-                if (basicMatch) return true;
+                if (nombreNorm.includes(queryNorm)) return true;
+                if (codigoNorm.includes(queryNorm)) return true;
+                if (descripcionNorm.includes(queryNorm)) return true;
                 
                 // Búsqueda flexible: coincidencia de palabras individuales
-                const queryWords = queryNorm.split(/\s+/);
+                const queryWords = queryNorm.split(/\s+/).filter(w => w.length > 0);
                 const palabrasMatch = queryWords.every(word => 
                     nombreNorm.includes(word) || 
                     codigoNorm.includes(word) ||
@@ -675,12 +663,12 @@
                 if (palabrasMatch) return true;
                 
                 // Búsqueda por iniciales (ej: "pne" encuentra "Pimienta Negra Entera")
-                const nombreWords = nombreNorm.split(/\s+/);
+                const nombreWords = nombreNorm.split(/\s+/).filter(w => w.length > 0);
                 const initials = nombreWords.map(w => w[0]).join('');
                 if (initials.includes(queryNorm)) return true;
                 
                 // Búsqueda difusa: permite letras en cualquier orden cercano
-                if (query.length >= 3) {
+                if (queryNorm.length >= 3) {
                     const fuzzyMatch = fuzzySearch(queryNorm, nombreNorm);
                     if (fuzzyMatch) return true;
                 }
