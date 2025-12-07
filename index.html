@@ -620,48 +620,133 @@
         // Configurar búsqueda
         function setupSearch() {
             const searchInput = document.getElementById('searchInput');
+            let searchTimeout;
+            
             searchInput.addEventListener('input', (e) => {
                 const query = e.target.value.toLowerCase().trim();
-                filterProducts(query);
+                
+                // Debounce para mejor rendimiento (espera 150ms después de escribir)
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    filterProducts(query);
+                }, 150);
+            });
+            
+            // También filtrar inmediatamente si es muy corto
+            searchInput.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase().trim();
+                if (query.length <= 2) {
+                    filterProducts(query);
+                }
             });
         }
 
-        // Filtrar productos
+        // Filtrar productos con búsqueda flexible
         function filterProducts(query) {
             if (!query) {
                 renderProducts(allProducts);
                 return;
             }
 
-            const filtered = allProducts.filter(p => 
-                p.nombre.toLowerCase().includes(query) || 
-                p.codigo.toLowerCase().includes(query) ||
-                (p.descripcion && p.descripcion.toLowerCase().includes(query))
-            );
+            const filtered = allProducts.filter(p => {
+                // Normalizar texto (quitar acentos para búsqueda flexible)
+                const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+                
+                const nombreNorm = normalize(p.nombre);
+                const codigoNorm = normalize(p.codigo);
+                const descripcionNorm = p.descripcion ? normalize(p.descripcion) : '';
+                const queryNorm = normalize(query);
+                
+                // Búsqueda básica: contiene la query
+                const basicMatch = nombreNorm.includes(queryNorm) || 
+                                   codigoNorm.includes(queryNorm) ||
+                                   descripcionNorm.includes(queryNorm);
+                
+                if (basicMatch) return true;
+                
+                // Búsqueda flexible: coincidencia de palabras individuales
+                const queryWords = queryNorm.split(/\s+/);
+                const palabrasMatch = queryWords.every(word => 
+                    nombreNorm.includes(word) || 
+                    codigoNorm.includes(word) ||
+                    descripcionNorm.includes(word)
+                );
+                
+                if (palabrasMatch) return true;
+                
+                // Búsqueda por iniciales (ej: "pne" encuentra "Pimienta Negra Entera")
+                const nombreWords = nombreNorm.split(/\s+/);
+                const initials = nombreWords.map(w => w[0]).join('');
+                if (initials.includes(queryNorm)) return true;
+                
+                // Búsqueda difusa: permite letras en cualquier orden cercano
+                if (query.length >= 3) {
+                    const fuzzyMatch = fuzzySearch(queryNorm, nombreNorm);
+                    if (fuzzyMatch) return true;
+                }
+                
+                return false;
+            });
             
             renderProducts(filtered);
+        }
+        
+        // Búsqueda difusa (permite errores de tipeo)
+        function fuzzySearch(query, text) {
+            if (query.length < 3) return false;
+            
+            let queryIndex = 0;
+            let textIndex = 0;
+            let matches = 0;
+            
+            while (textIndex < text.length && queryIndex < query.length) {
+                if (text[textIndex] === query[queryIndex]) {
+                    matches++;
+                    queryIndex++;
+                }
+                textIndex++;
+            }
+            
+            // Si coincide al menos el 70% de los caracteres de la query
+            const matchPercentage = matches / query.length;
+            return matchPercentage >= 0.7;
         }
 
         // Configurar lector de código de barras
         function setupBarcodeReader() {
+            let lastKeyTime = Date.now();
+            
             document.addEventListener('keypress', (e) => {
-                // Detectar entrada rápida de scanner (normalmente termina con Enter)
-                if (e.key === 'Enter' && barcodeBuffer.length > 3) {
-                    const barcode = barcodeBuffer.trim();
-                    document.getElementById('searchInput').value = barcode;
-                    filterProducts(barcode);
-                    barcodeBuffer = '';
-                    return;
+                const currentTime = Date.now();
+                const timeDiff = currentTime - lastKeyTime;
+                lastKeyTime = currentTime;
+                
+                // Si el input NO está enfocado y las teclas vienen rápido (< 50ms), es un scanner
+                const searchInput = document.getElementById('searchInput');
+                if (document.activeElement !== searchInput && timeDiff < 50) {
+                    // Detectar entrada rápida de scanner
+                    if (e.key === 'Enter' && barcodeBuffer.length > 3) {
+                        searchInput.value = barcodeBuffer.trim();
+                        searchInput.focus();
+                        filterProducts(barcodeBuffer.trim().toLowerCase());
+                        barcodeBuffer = '';
+                        return;
+                    }
+
+                    // Acumular caracteres
+                    barcodeBuffer += e.key;
+
+                    // Limpiar buffer después de 100ms de inactividad
+                    clearTimeout(barcodeTimeout);
+                    barcodeTimeout = setTimeout(() => {
+                        if (barcodeBuffer.length > 3) {
+                            searchInput.value = barcodeBuffer.trim();
+                            searchInput.focus();
+                            filterProducts(barcodeBuffer.trim().toLowerCase());
+                        }
+                        barcodeBuffer = '';
+                    }, 100);
                 }
-
-                // Acumular caracteres
-                barcodeBuffer += e.key;
-
-                // Limpiar buffer después de 100ms de inactividad
-                clearTimeout(barcodeTimeout);
-                barcodeTimeout = setTimeout(() => {
-                    barcodeBuffer = '';
-                }, 100);
             });
         }
 
