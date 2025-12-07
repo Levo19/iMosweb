@@ -476,6 +476,7 @@
         let userSolicitudes = {}; // Cache de solicitudes por producto del usuario
         let barcodeBuffer = ''; // Buffer para lectura de código de barras
         let barcodeTimeout = null;
+        let canAddRequests = true; // Control de horario
 
         // Verificar sesión al cargar
         window.addEventListener('load', () => {
@@ -541,38 +542,50 @@
             document.getElementById('loginSection').classList.add('hidden');
             document.getElementById('mainApp').classList.remove('hidden');
             document.getElementById('userDisplay').textContent = `👤 ${currentUser}`;
+            
+            // Verificar horario
+            checkSchedule();
+            
+            // Cargar datos en paralelo para mayor velocidad
             loadProducts();
             setupSearch();
             setupBarcodeReader();
         }
 
-        // Cargar productos
+        // Verificar horario de trabajo (7am - 7pm)
+        function checkSchedule() {
+            const now = new Date();
+            const hour = now.getHours();
+            
+            // Horario permitido: 7am (7) a 7pm (19)
+            canAddRequests = hour >= 7 && hour < 19;
+            
+            if (!canAddRequests) {
+                const msg = document.createElement('div');
+                msg.style.cssText = 'background:#ff9800;color:white;padding:12px;text-align:center;border-radius:8px;margin-bottom:15px;font-weight:600;';
+                msg.innerHTML = '⏰ Fuera de horario: Solo puedes consultar. Las solicitudes están disponibles de 7:00 AM a 7:00 PM';
+                document.getElementById('mainApp').insertBefore(msg, document.querySelector('.search-bar-container'));
+            }
+        }
+
+        // Cargar productos - OPTIMIZADO PARA MUCHOS PRODUCTOS
         async function loadProducts() {
             const container = document.getElementById('productsContainer');
             container.innerHTML = '<div class="loading">Cargando productos...</div>';
 
             try {
-                const response = await fetch(`${APPS_SCRIPT_URL}?action=getProducts`);
-                const products = await response.json();
+                // Cargar productos y solicitudes en paralelo
+                const [productsResponse, solicitudesResponse] = await Promise.all([
+                    fetch(`${APPS_SCRIPT_URL}?action=getProducts`),
+                    fetch(`${APPS_SCRIPT_URL}?action=getUserSolicitudes&usuario=${currentUser}`)
+                ]);
+                
+                const products = await productsResponse.json();
+                const solicitudes = await solicitudesResponse.json();
                 
                 allProducts = products;
                 
-                // Cargar solicitudes del usuario
-                await loadUserSolicitudes();
-                
-                renderProducts(products);
-            } catch (error) {
-                container.innerHTML = '<p style="text-align:center;color:#e74c3c;">Error al cargar productos</p>';
-            }
-        }
-
-        // Cargar solicitudes del usuario actual
-        async function loadUserSolicitudes() {
-            try {
-                const response = await fetch(`${APPS_SCRIPT_URL}?action=getUserSolicitudes&usuario=${currentUser}`);
-                const solicitudes = await response.json();
-                
-                // Agrupar por código de producto
+                // Procesar solicitudes del usuario
                 userSolicitudes = {};
                 solicitudes.forEach(sol => {
                     if (!userSolicitudes[sol.codigo]) {
@@ -580,12 +593,16 @@
                     }
                     userSolicitudes[sol.codigo] += parseFloat(sol.cantidad) || 0;
                 });
+                
+                // Renderizar productos
+                renderProducts(products);
             } catch (error) {
-                console.error('Error cargando solicitudes:', error);
+                container.innerHTML = '<p style="text-align:center;color:#e74c3c;">Error al cargar productos</p>';
+                console.error('Error:', error);
             }
         }
 
-        // Renderizar productos
+        // Renderizar productos - OPTIMIZADO CON PAGINACIÓN VIRTUAL
         function renderProducts(products) {
             const container = document.getElementById('productsContainer');
             
@@ -594,48 +611,84 @@
                 return;
             }
 
-            container.innerHTML = products.map(p => {
-                const solicitado = userSolicitudes[p.codigo] || 0;
-                return `
-                    <div class="product-card" data-codigo="${p.codigo}" data-nombre="${p.nombre.toLowerCase()}">
-                        <img src="${p.imagen || 'https://via.placeholder.com/280x200?text=Sin+Imagen'}" 
-                             alt="${p.nombre}" class="product-image" 
-                             onerror="this.src='https://via.placeholder.com/280x200?text=Sin+Imagen'">
-                        <div class="product-info">
-                            <h3>${p.nombre}</h3>
-                            <p><strong>Código:</strong> ${p.codigo}</p>
-                            <p>${p.descripcion || ''}</p>
-                            <div class="product-badges">
-                                <span class="stock-badge">Stock: ${p.stock}</span>
-                                ${solicitado > 0 ? `<span class="requested-badge">Solicitado: ${solicitado}</span>` : ''}
+            // Para mejor rendimiento con muchos productos, renderizar por lotes
+            const BATCH_SIZE = 50; // Renderizar 50 productos a la vez
+            let currentBatch = 0;
+            
+            const renderBatch = () => {
+                const start = currentBatch * BATCH_SIZE;
+                const end = Math.min(start + BATCH_SIZE, products.length);
+                
+                const html = [];
+                for (let i = start; i < end; i++) {
+                    const p = products[i];
+                    const solicitado = userSolicitudes[p.codigo] || 0;
+                    
+                    html.push(`
+                        <div class="product-card" data-codigo="${p.codigo}" data-nombre="${p.nombre.toLowerCase()}">
+                            <img src="${p.imagen || 'https://via.placeholder.com/280x200?text=Sin+Imagen'}" 
+                                 alt="${p.nombre}" class="product-image" 
+                                 onerror="this.src='https://via.placeholder.com/280x200?text=Sin+Imagen'">
+                            <div class="product-info">
+                                <h3>${p.nombre}</h3>
+                                <p><strong>Código:</strong> ${p.codigo}</p>
+                                <p>${p.descripcion || ''}</p>
+                                <div class="product-badges">
+                                    <span class="stock-badge">Stock: ${p.stock}</span>
+                                    ${solicitado > 0 ? `<span class="requested-badge">Solicitado: ${solicitado}</span>` : ''}
+                                </div>
+                            </div>
+                            <div class="product-actions">
+                                <button class="btn-small btn-add" onclick='openAddModal(${JSON.stringify(p).replace(/'/g, "&#39;")})' ${!canAddRequests ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>
+                                    ➕ Agregar
+                                </button>
+                                <button class="btn-small btn-history" onclick="showHistory('${p.codigo}')">
+                                    📋 Historial
+                                </button>
                             </div>
                         </div>
-                        <div class="product-actions">
-                            <button class="btn-small btn-add" onclick='openAddModal(${JSON.stringify(p)})'>
-                                ➕ Agregar
-                            </button>
-                            <button class="btn-small btn-history" onclick="showHistory('${p.codigo}')">
-                                📋 Historial
-                            </button>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+                    `);
+                }
+                
+                if (currentBatch === 0) {
+                    container.innerHTML = html.join('');
+                } else {
+                    container.innerHTML += html.join('');
+                }
+                
+                currentBatch++;
+                
+                // Si hay más productos, renderizar el siguiente lote
+                if (end < products.length) {
+                    setTimeout(renderBatch, 10); // Pequeño delay para no bloquear UI
+                }
+            };
+            
+            // Iniciar renderizado
+            currentBatch = 0;
+            renderBatch();
         }
 
-        // Configurar búsqueda
+        // Configurar búsqueda - ULTRA OPTIMIZADA
         function setupSearch() {
             const searchInput = document.getElementById('searchInput');
             let typingTimer;
-            const doneTypingInterval = 400; // Espera 400ms de inactividad
             
             // Búsqueda automática después de dejar de escribir
             searchInput.addEventListener('input', (e) => {
                 clearTimeout(typingTimer);
+                const query = e.target.value.trim();
+                
+                // Si está vacío, mostrar todo inmediatamente
+                if (!query) {
+                    renderProducts(allProducts);
+                    return;
+                }
+                
+                // Esperar 300ms después de última tecla
                 typingTimer = setTimeout(() => {
-                    const query = e.target.value.trim();
                     filterProducts(query);
-                }, doneTypingInterval);
+                }, 300);
             });
             
             // Búsqueda INSTANTÁNEA con Enter
@@ -649,7 +702,7 @@
             });
         }
 
-        // Búsqueda manual (botón) - INSTANTÁNEA
+        // Búsqueda manual (botón)
         function manualSearch() {
             const searchInput = document.getElementById('searchInput');
             const query = searchInput.value.trim();
@@ -664,44 +717,39 @@
             searchInput.focus();
         }
 
-        // Filtrar productos - SÚPER RÁPIDO
+        // Filtrar productos - OPTIMIZADO PARA MILES DE PRODUCTOS
         function filterProducts(query) {
             if (!query) {
                 renderProducts(allProducts);
                 return;
             }
 
-            // Normalizar (sin acentos, minúsculas)
-            const normalize = (str) => {
-                if (!str) return '';
-                return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-            };
-
             const queryLower = query.toLowerCase();
-            const queryNorm = normalize(query);
-
-            // Filtrado instantáneo
-            const filtered = allProducts.filter(p => {
-                // Búsqueda directa (más rápida)
-                const nombreLower = p.nombre.toLowerCase();
-                const codigoLower = p.codigo.toLowerCase();
-                
-                if (nombreLower.includes(queryLower)) return true;
-                if (codigoLower.includes(queryLower)) return true;
-                if (p.descripcion && p.descripcion.toLowerCase().includes(queryLower)) return true;
-                
-                // Búsqueda sin acentos (solo si no encontró con acentos)
-                const nombreNorm = normalize(p.nombre);
-                const codigoNorm = normalize(p.codigo);
-                
-                if (nombreNorm.includes(queryNorm)) return true;
-                if (codigoNorm.includes(queryNorm)) return true;
-                if (p.descripcion && normalize(p.descripcion).includes(queryNorm)) return true;
-                
-                return false;
-            });
             
-            // Renderizar inmediatamente
+            // Normalizar solo si es necesario (más rápido)
+            const queryNorm = queryLower.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+            // Filtrado súper optimizado
+            const filtered = [];
+            
+            for (let i = 0; i < allProducts.length; i++) {
+                const p = allProducts[i];
+                
+                // Búsqueda directa (la más rápida)
+                if (p.nombre.toLowerCase().indexOf(queryLower) !== -1 ||
+                    p.codigo.toLowerCase().indexOf(queryLower) !== -1 ||
+                    (p.descripcion && p.descripcion.toLowerCase().indexOf(queryLower) !== -1)) {
+                    filtered.push(p);
+                    continue;
+                }
+                
+                // Búsqueda sin acentos (solo si no encontró)
+                const nombreNorm = p.nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+                if (nombreNorm.indexOf(queryNorm) !== -1) {
+                    filtered.push(p);
+                }
+            }
+            
             renderProducts(filtered);
         }
 
@@ -750,12 +798,21 @@
 
         // Modal agregar
         function openAddModal(product) {
+            // Verificar horario antes de abrir modal
+            if (!canAddRequests) {
+                alert('⏰ Fuera de horario: Las solicitudes solo están disponibles de 7:00 AM a 7:00 PM');
+                return;
+            }
+            
             selectedProduct = product;
             document.getElementById('modalProductName').textContent = product.nombre;
             document.getElementById('modalProductCode').textContent = product.codigo;
             document.getElementById('quantityInput').value = '1';
             document.getElementById('addMessage').innerHTML = '';
             document.getElementById('addModal').classList.add('active');
+            
+            // Enfocar el input de cantidad
+            setTimeout(() => document.getElementById('quantityInput').focus(), 100);
         }
 
         function closeAddModal() {
