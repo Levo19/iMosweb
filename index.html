@@ -418,8 +418,14 @@
                     <input type="text" 
                            id="searchInput" 
                            class="search-input" 
-                           placeholder="🔍 Buscar por nombre, código o escanear código de barras..."
+                           placeholder="🔍 Buscar producto... (presiona Enter para buscar)"
                            autocomplete="off">
+                    <button class="scan-btn" onclick="manualSearch()" style="background: #27ae60;">
+                        🔍 Buscar
+                    </button>
+                    <button class="scan-btn" onclick="clearSearch()">
+                        ✖️ Limpiar
+                    </button>
                     <button class="scan-btn" onclick="startBarcodeScanner()">
                         📷 Escanear
                     </button>
@@ -620,84 +626,79 @@
         // Configurar búsqueda
         function setupSearch() {
             const searchInput = document.getElementById('searchInput');
+            let typingTimer;
+            const doneTypingInterval = 300; // 300ms después de dejar de escribir
             
+            // Búsqueda mientras escribe (con delay)
             searchInput.addEventListener('input', (e) => {
-                const query = e.target.value.trim();
-                filterProducts(query);
+                clearTimeout(typingTimer);
+                typingTimer = setTimeout(() => {
+                    const query = e.target.value.trim();
+                    filterProducts(query);
+                }, doneTypingInterval);
+            });
+            
+            // Búsqueda inmediata con Enter
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    clearTimeout(typingTimer);
+                    const query = e.target.value.trim();
+                    filterProducts(query);
+                }
             });
         }
 
-        // Filtrar productos con búsqueda flexible
+        // Búsqueda manual (botón)
+        function manualSearch() {
+            const searchInput = document.getElementById('searchInput');
+            const query = searchInput.value.trim();
+            filterProducts(query);
+        }
+
+        // Limpiar búsqueda
+        function clearSearch() {
+            const searchInput = document.getElementById('searchInput');
+            searchInput.value = '';
+            renderProducts(allProducts);
+            searchInput.focus();
+        }
+
+        // Filtrar productos con búsqueda flexible y rápida
         function filterProducts(query) {
+            const container = document.getElementById('productsContainer');
+            
             if (!query) {
                 renderProducts(allProducts);
                 return;
             }
 
-            // Normalizar texto (quitar acentos para búsqueda flexible)
-            const normalize = (str) => {
-                if (!str) return '';
-                return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-            };
+            // Mostrar indicador de búsqueda
+            container.innerHTML = '<div class="loading">Buscando...</div>';
 
-            const queryNorm = normalize(query);
+            // Usar setTimeout para no bloquear la UI
+            setTimeout(() => {
+                // Normalizar texto (quitar acentos)
+                const normalize = (str) => {
+                    if (!str) return '';
+                    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+                };
 
-            const filtered = allProducts.filter(p => {
-                const nombreNorm = normalize(p.nombre);
-                const codigoNorm = normalize(p.codigo);
-                const descripcionNorm = normalize(p.descripcion);
+                const queryNorm = normalize(query);
+
+                const filtered = allProducts.filter(p => {
+                    const nombreNorm = normalize(p.nombre);
+                    const codigoNorm = normalize(p.codigo);
+                    const descripcionNorm = normalize(p.descripcion);
+                    
+                    // Búsqueda simple y directa
+                    return nombreNorm.includes(queryNorm) || 
+                           codigoNorm.includes(queryNorm) ||
+                           descripcionNorm.includes(queryNorm);
+                });
                 
-                // Búsqueda básica: contiene la query
-                if (nombreNorm.includes(queryNorm)) return true;
-                if (codigoNorm.includes(queryNorm)) return true;
-                if (descripcionNorm.includes(queryNorm)) return true;
-                
-                // Búsqueda flexible: coincidencia de palabras individuales
-                const queryWords = queryNorm.split(/\s+/).filter(w => w.length > 0);
-                const palabrasMatch = queryWords.every(word => 
-                    nombreNorm.includes(word) || 
-                    codigoNorm.includes(word) ||
-                    descripcionNorm.includes(word)
-                );
-                
-                if (palabrasMatch) return true;
-                
-                // Búsqueda por iniciales (ej: "pne" encuentra "Pimienta Negra Entera")
-                const nombreWords = nombreNorm.split(/\s+/).filter(w => w.length > 0);
-                const initials = nombreWords.map(w => w[0]).join('');
-                if (initials.includes(queryNorm)) return true;
-                
-                // Búsqueda difusa: permite letras en cualquier orden cercano
-                if (queryNorm.length >= 3) {
-                    const fuzzyMatch = fuzzySearch(queryNorm, nombreNorm);
-                    if (fuzzyMatch) return true;
-                }
-                
-                return false;
-            });
-            
-            renderProducts(filtered);
-        }
-        
-        // Búsqueda difusa (permite errores de tipeo)
-        function fuzzySearch(query, text) {
-            if (query.length < 3) return false;
-            
-            let queryIndex = 0;
-            let textIndex = 0;
-            let matches = 0;
-            
-            while (textIndex < text.length && queryIndex < query.length) {
-                if (text[textIndex] === query[queryIndex]) {
-                    matches++;
-                    queryIndex++;
-                }
-                textIndex++;
-            }
-            
-            // Si coincide al menos el 70% de los caracteres de la query
-            const matchPercentage = matches / query.length;
-            return matchPercentage >= 0.7;
+                renderProducts(filtered);
+            }, 50);
         }
 
         // Configurar lector de código de barras
