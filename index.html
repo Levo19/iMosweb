@@ -627,9 +627,9 @@
         function setupSearch() {
             const searchInput = document.getElementById('searchInput');
             let typingTimer;
-            const doneTypingInterval = 300; // 300ms después de dejar de escribir
+            const doneTypingInterval = 400; // Espera 400ms de inactividad
             
-            // Búsqueda mientras escribe (con delay)
+            // Búsqueda automática después de dejar de escribir
             searchInput.addEventListener('input', (e) => {
                 clearTimeout(typingTimer);
                 typingTimer = setTimeout(() => {
@@ -638,8 +638,8 @@
                 }, doneTypingInterval);
             });
             
-            // Búsqueda inmediata con Enter
-            searchInput.addEventListener('keypress', (e) => {
+            // Búsqueda INSTANTÁNEA con Enter
+            searchInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     clearTimeout(typingTimer);
@@ -649,7 +649,7 @@
             });
         }
 
-        // Búsqueda manual (botón)
+        // Búsqueda manual (botón) - INSTANTÁNEA
         function manualSearch() {
             const searchInput = document.getElementById('searchInput');
             const query = searchInput.value.trim();
@@ -664,41 +664,45 @@
             searchInput.focus();
         }
 
-        // Filtrar productos con búsqueda flexible y rápida
+        // Filtrar productos - SÚPER RÁPIDO
         function filterProducts(query) {
-            const container = document.getElementById('productsContainer');
-            
             if (!query) {
                 renderProducts(allProducts);
                 return;
             }
 
-            // Mostrar indicador de búsqueda
-            container.innerHTML = '<div class="loading">Buscando...</div>';
+            // Normalizar (sin acentos, minúsculas)
+            const normalize = (str) => {
+                if (!str) return '';
+                return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+            };
 
-            // Usar setTimeout para no bloquear la UI
-            setTimeout(() => {
-                // Normalizar texto (quitar acentos)
-                const normalize = (str) => {
-                    if (!str) return '';
-                    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-                };
+            const queryLower = query.toLowerCase();
+            const queryNorm = normalize(query);
 
-                const queryNorm = normalize(query);
-
-                const filtered = allProducts.filter(p => {
-                    const nombreNorm = normalize(p.nombre);
-                    const codigoNorm = normalize(p.codigo);
-                    const descripcionNorm = normalize(p.descripcion);
-                    
-                    // Búsqueda simple y directa
-                    return nombreNorm.includes(queryNorm) || 
-                           codigoNorm.includes(queryNorm) ||
-                           descripcionNorm.includes(queryNorm);
-                });
+            // Filtrado instantáneo
+            const filtered = allProducts.filter(p => {
+                // Búsqueda directa (más rápida)
+                const nombreLower = p.nombre.toLowerCase();
+                const codigoLower = p.codigo.toLowerCase();
                 
-                renderProducts(filtered);
-            }, 50);
+                if (nombreLower.includes(queryLower)) return true;
+                if (codigoLower.includes(queryLower)) return true;
+                if (p.descripcion && p.descripcion.toLowerCase().includes(queryLower)) return true;
+                
+                // Búsqueda sin acentos (solo si no encontró con acentos)
+                const nombreNorm = normalize(p.nombre);
+                const codigoNorm = normalize(p.codigo);
+                
+                if (nombreNorm.includes(queryNorm)) return true;
+                if (codigoNorm.includes(queryNorm)) return true;
+                if (p.descripcion && normalize(p.descripcion).includes(queryNorm)) return true;
+                
+                return false;
+            });
+            
+            // Renderizar inmediatamente
+            renderProducts(filtered);
         }
 
         // Configurar lector de código de barras
