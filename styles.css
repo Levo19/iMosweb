@@ -11,7 +11,7 @@ body {
     overflow-x: hidden;
 }
 
-/* LOGIN SPLIT SCREEN */
+/* LOGIN */
 .login-container {
     display: flex;
     height: 100vh;
@@ -400,7 +400,7 @@ body {
     box-shadow: 0 4px 15px rgba(0,0,0,0.2);
 }
 
-/* SORT DROPDOWN */
+/* SORT */
 .sort-dropdown {
     position: relative;
 }
@@ -513,7 +513,7 @@ body {
 .badge-stock { background: #d4edda; color: #155724; }
 .badge-requested { background: #d1ecf1; color: #0c5460; }
 
-/* QUANTITY CONTROLS IN CARD */
+/* QUANTITY CONTROLS */
 .quantity-control {
     display: flex;
     align-items: center;
@@ -775,7 +775,7 @@ body {
     border-radius: 5px;
 }
 
-/* WHATSAPP FLOAT BUTTON */
+/* WHATSAPP */
 .whatsapp-float {
     position: fixed;
     bottom: 30px;
@@ -889,3 +889,96 @@ body {
     .menu-item {
         padding: 10px;
     }
+    
+    .menu-text {
+        display: none;
+    }
+    
+    .app-header {
+        left: 0;
+        top: 60px;
+        height: 60px;
+        padding: 0 15px;
+    }
+    
+    .app-content {
+        margin-left: 0;
+        margin-top: 120px;
+        padding: 15px;
+    }
+    
+    .header-title {
+        font-size: 16px;
+    }
+    
+    .user-badge {
+        font-size: 12px;
+        padding: 6px 10px;
+    }
+    
+    .btn-logout {
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+    
+    .search-bar {
+        flex-wrap: wrap;
+    }
+    
+    .search-input {
+        min-width: 100%;
+        flex: none;
+    }
+    
+    .btn-search {
+        flex: 1;
+        padding: 12px;
+    }
+    
+    .search-container {
+        position: relative;
+        top: 0;
+    }
+    
+    .products-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .whatsapp-float {
+        bottom: 20px;
+        right: 20px;
+        width: 50px;
+        height: 50px;
+    }
+    
+    .whatsapp-float img {
+        width: 28px;
+        height: 28px;
+    }
+}
+
+/* SMALL MOBILE */
+@media (max-width: 480px) {
+    .brand-logo {
+        font-size: 50px;
+    }
+    
+    .brand-tagline {
+        font-size: 16px;
+    }
+    
+    .login-box h2 {
+        font-size: 24px;
+    }
+    
+    .quantity-control button {
+        width: 35px;
+        height: 35px;
+        font-size: 18px;
+    }
+    
+    .btn-confirm {
+        width: 35px;
+        height: 35px;
+    }
+}
