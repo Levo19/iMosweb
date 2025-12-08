@@ -1,3 +1,4 @@
+
 // ============================================
 // LEVO - SISTEMA DE PEDIDOS CON CATEGORÍAS
 // ============================================
@@ -15,33 +16,24 @@ let tutorialImages = [];
 let currentSort = 'default';
 let qrScanner = null;
 
-// ===== INICIALIZACIÓN (CORREGIDO) =====
-function checkSession() {
-    try {
-        const sessionStr = localStorage.getItem('session');
-        // Si no hay sesión o es "undefined", salimos
-        if (!sessionStr || sessionStr === "undefined") {
-            return;
-        }
+// ===== INICIALIZACIÓN =====
+window.addEventListener('load', () => {
+    checkSession();
+});
 
-        const session = JSON.parse(sessionStr);
-        
-        if (session && session.user && session.expiry) {
-            const now = new Date().getTime();
-            if (now < session.expiry) {
-                currentUser = session.user;
-                showMainApp();
-                resetSessionTimeout();
-            } else {
-                localStorage.removeItem('session'); // Expiró
-            }
+function checkSession() {
+    const session = JSON.parse(localStorage.getItem('session') || 'null');
+    if (session && session.user && session.expiry) {
+        const now = new Date().getTime();
+        if (now < session.expiry) {
+            currentUser = session.user;
+            showMainApp();
+            resetSessionTimeout();
+        } else {
+            localStorage.removeItem('session');
         }
-    } catch (error) {
-        console.error("Error leyendo sesión:", error);
-        localStorage.removeItem('session'); // Borramos datos corruptos
     }
 }
-
 
 // ===== LOGIN =====
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -83,16 +75,15 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 
 // ===== MOSTRAR APP =====
 async function showMainApp() {
-    
-//document.getElementById('loginContainer').style.display = 'none';
-    //document.getElementById('mainApp').classList.add('active');
+    document.getElementById('loginContainer').style.display = 'none';
+    document.getElementById('mainApp').classList.add('active');
     document.getElementById('userDisplay').textContent = currentUser;
     
-   // checkSchedule();
+    checkSchedule();
     await loadProducts();
-    //setupSearch();
-    //await loadTutorial();
-    //setTimeout(() => showTutorial(), 1000);
+    setupSearch();
+    await loadTutorial();
+    setTimeout(() => showTutorial(), 1000);
 }
 
 // ===== VERIFICAR HORARIO =====
@@ -112,134 +103,107 @@ function checkSchedule() {
     }
 }
 
-// ===== CARGAR PRODUCTOS (VERSIÓN SEGURA) =====
+// ===== CARGAR PRODUCTOS CON CATEGORÍAS =====
 async function loadProducts() {
     const container = document.getElementById('productsContainer');
     container.innerHTML = '<div class="loading">Cargando productos...</div>';
 
     try {
-        console.log("Iniciando carga de datos..."); // DIAGNÓSTICO
-        
         const [productsRes, solicitudesRes] = await Promise.all([
             fetch(`${APPS_SCRIPT_URL}?action=getProducts`),
             fetch(`${APPS_SCRIPT_URL}?action=getTodaySolicitudes&usuario=${currentUser}`)
         ]);
-
-        const productsData = await productsRes.json();
-        const solicitudesData = await solicitudesRes.json();
-
-        console.log("Productos recibidos:", productsData); // DIAGNÓSTICO
         
-        // VERIFICACIÓN DE SEGURIDAD 1: ¿Es un error del servidor?
-        if (productsData.error || (productsData.result === 'error')) {
-            throw new Error(productsData.error || "Error en el servidor");
-        }
-
-        // VERIFICACIÓN DE SEGURIDAD 2: ¿Es una lista real?
-        if (!Array.isArray(productsData)) {
-            console.error("Formato incorrecto:", productsData);
-            throw new Error("Los productos no llegaron como una lista válida");
-        }
-
-        allProducts = productsData;
+        allProducts = await productsRes.json();
+        const solicitudes = await solicitudesRes.json();
         
-        // Procesar solicitudes (con seguridad extra)
+        // El balance ya viene calculado desde el backend
+        // (solicitado - separado - despachado)
         userSolicitudes = {};
-        if (Array.isArray(solicitudesData)) {
-            solicitudesData.forEach(sol => {
-                if(sol && sol.codigo) {
-                   userSolicitudes[sol.codigo] = sol.cantidad;
-                }
-            });
-        }
-
-        // Llamar al renderizador
+        solicitudes.forEach(sol => {
+            userSolicitudes[sol.codigo] = sol.cantidad;
+        });
+        
         renderProducts(allProducts);
-
     } catch (error) {
-        console.error("Error FATAL en loadProducts:", error);
-        container.innerHTML = `
-            <div style="text-align:center; padding: 20px; background: rgba(255,255,255,0.9); border-radius: 10px; margin: 20px;">
-                <p style="color:red; font-weight:bold;">⚠️ Error al cargar datos</p>
-                <p style="font-size:12px; color:#666;">${error.message}</p>
-                <button onclick="location.reload()" style="padding:10px 20px; background:#333; color:white; border:none; border-radius:5px; margin-top:10px;">Reintentar</button>
-            </div>`;
+        container.innerHTML = '<p class="no-results">Error al cargar productos</p>';
+        console.error(error);
     }
 }
 
-
-// ===== RENDERIZAR PRODUCTOS (VERSIÓN SEGURA Y RÁPIDA) =====
+// ===== RENDERIZAR PRODUCTOS =====
 function renderProducts(products) {
     const container = document.getElementById('productsContainer');
     
-    // Seguridad extra: Si products es nulo o indefinido
-    if (!products || !Array.isArray(products)) {
-        container.innerHTML = '<div class="no-results">Error: Datos de productos inválidos</div>';
-        return;
-    }
-
     if (products.length === 0) {
-        container.innerHTML = '<div class="no-results">No se encontraron productos en el inventario</div>';
+        container.innerHTML = '<div class="no-results">No se encontraron productos</div>';
         return;
     }
 
-    // Limpiamos container una sola vez
-    container.innerHTML = '';
-    
-    const BATCH_SIZE = 500; // Lote grande para velocidad
+    const BATCH_SIZE = 50;
     let currentBatch = 0;
-
+    
     const renderBatch = () => {
         const start = currentBatch * BATCH_SIZE;
         const end = Math.min(start + BATCH_SIZE, products.length);
+        const html = [];
         
-        let htmlBuffer = ''; // Usamos string plano por rendimiento
-
         for (let i = start; i < end; i++) {
             const p = products[i];
-            // Protección contra productos vacíos
-            if (!p) continue;
-
             const balance = userSolicitudes[p.codigo] || 0;
-            const disabledAttr = !canAddRequests ? 'disabled' : '';
+            const disabled = !canAddRequests ? 'disabled' : '';
             
-            // Construcción segura del HTML
-            htmlBuffer += `
+            html.push(`
                 <div class="product-card" data-codigo="${p.codigo}">
+                    <img src="${p.imagen || 'https://via.placeholder.com/300x200?text=Sin+Imagen'}" 
+                         alt="${p.nombre}" class="product-image" 
+                         onerror="this.src='https://via.placeholder.com/300x200?text=Sin+Imagen'">
                     <div class="product-info">
-                        <h3>${p.nombre || 'Sin Nombre'}</h3>
-                        <p><strong>Código:</strong> ${p.codigo || '---'}</p>
+                        <h3>${p.nombre}</h3>
+                        <p><strong>Código:</strong> ${p.codigo}</p>
+                        <p>${p.descripcion || ''}</p>
                         <div class="product-badges">
-                            <span class="badge badge-stock">Stock: ${p.stock || 0}</span>
-                            ${balance !== 0 ? `<span class="badge badge-requested">Disponible: ${parseFloat(balance).toFixed(1)}</span>` : ''}
+                            <span class="badge badge-stock">Stock: ${p.stock}</span>
+                            ${balance !== 0 ? `<span class="badge badge-requested">Disponible: ${balance.toFixed(1)}</span>` : ''}
                         </div>
                     </div>
                     <div class="quantity-control">
-                        <button class="btn-minus" onclick="decrementQuantity('${p.codigo}')" ${disabledAttr}>−</button>
-                        <input type="number" id="qty-${p.codigo}" class="quantity-input-inline" value="${Math.max(0, balance).toFixed(1)}" step="0.1" min="0" onchange="validateQuantity('${p.codigo}')" ${disabledAttr}>
-                        <button class="btn-plus" onclick="incrementQuantity('${p.codigo}')" ${disabledAttr}>+</button>
-                        <button class="btn-confirm" onclick="confirmQuantity('${p.codigo}')" ${disabledAttr}>✈️</button>
+                        <button class="btn-minus" onclick="decrementQuantity('${p.codigo}')" ${disabled}>−</button>
+                        <input type="number" 
+                               id="qty-${p.codigo}" 
+                               class="quantity-input-inline" 
+                               value="${Math.max(0, balance).toFixed(1)}" 
+                               step="0.1"
+                               min="0"
+                               onchange="validateQuantity('${p.codigo}')"
+                               ${disabled}>
+                        <button class="btn-plus" onclick="incrementQuantity('${p.codigo}')" ${disabled}>+</button>
+                        <button class="btn-confirm" onclick="confirmQuantity('${p.codigo}')" title="Confirmar" ${disabled}>✈️</button>
                     </div>
-                     <div class="product-actions">
-                        <button class="btn-action btn-history" onclick="showHistory('${p.codigo}')">📋 Historial</button>
+                    <div class="product-actions">
+                        <button class="btn-action btn-history" onclick="showHistory('${p.codigo}')">
+                            📋 Historial
+                        </button>
                     </div>
                 </div>
-            `;
+            `);
         }
-
-        // Inserción al DOM
-        container.insertAdjacentHTML('beforeend', htmlBuffer);
-
+        
+        if (currentBatch === 0) {
+            container.innerHTML = html.join('');
+        } else {
+            container.innerHTML += html.join('');
+        }
+        
         currentBatch++;
         if (end < products.length) {
-            setTimeout(renderBatch, 0);
+            setTimeout(renderBatch, 10);
         }
     };
-
+    
+    currentBatch = 0;
     renderBatch();
 }
-
-
 
 // ===== BÚSQUEDA =====
 function setupSearch() {
@@ -620,56 +584,33 @@ function closeTutorial() {
     localStorage.setItem('tutorialLastSeen', new Date().toDateString());
 }
 
-// ===== SESIÓN (CORREGIDO) =====
+// ===== SESIÓN =====
 function resetSessionTimeout() {
-    return; // <--- AGREGA ESTO EN LA PRIMERA LÍNEA DE LA FUNCIÓN
-    
-    // ... el resto del código quedará ignorado ...
-
-
     if (sessionTimeout) clearTimeout(sessionTimeout);
     
     sessionTimeout = setTimeout(() => {
         logout();
         alert('Tu sesión ha expirado por inactividad');
-        window.location.reload(); // Recargamos para mostrar el login limpio
     }, 4 * 60 * 60 * 1000);
 
-    // Eliminamos escuchadores previos para no acumular basura
-    document.removeEventListener('click', extendSession);
-    document.removeEventListener('keypress', extendSession);
-
-    // Agregamos los nuevos
-    document.addEventListener('click', extendSession, { passive: true });
-    document.addEventListener('keypress', extendSession, { passive: true });
-}
-
-// Función auxiliar para no redefinirla dentro de resetSessionTimeout
-function extendSession() {
-    if (currentUser) {
-        const sessionStr = localStorage.getItem('session');
-        if (sessionStr) {
-            try {
-                const session = JSON.parse(sessionStr);
-                session.expiry = new Date().getTime() + (4 * 60 * 60 * 1000);
-                localStorage.setItem('session', JSON.stringify(session));
-            } catch (e) {
-                // Ignorar errores silenciosamente en eventos frecuentes
+    ['click', 'keypress'].forEach(event => {
+        document.addEventListener(event, () => {
+            if (currentUser) {
+                const session = JSON.parse(localStorage.getItem('session'));
+                if (session) {
+                    session.expiry = new Date().getTime() + (4 * 60 * 60 * 1000);
+                    localStorage.setItem('session', JSON.stringify(session));
+                }
             }
-        }
-    }
+        }, { passive: true });
+    });
 }
 
-// ===== CERRAR MODALES Y MENUS =====
-window.onclick = (e) => {
-    if (e.target.classList.contains('modal')) {
-        e.target.classList.remove('active');
-    }
-};
+function logout() {
+    localStorage.removeItem('session');
+    currentUser = null;
+    if (sessionTimeout) clearTimeout(sessionTimeout);
+    location.reload();
+}
 
-document.addEventListener('click', (e) => {
-    const sortMenu = document.getElementById('sortMenu');
-    if (sortMenu && !e.target.closest('.sort-dropdown')) {
-        sortMenu.classList.remove('active');
-    }
-});
+// ===== 
