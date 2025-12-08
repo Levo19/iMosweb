@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LEVO - Sistema de Pedidos</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- Librería para leer QR -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
     <!-- Login -->
@@ -13,7 +15,9 @@
             <div class="login-brand">
                 <div class="brand-logo">LEVO</div>
                 <p class="brand-tagline">Sistema Inteligente de Gestión</p>
-                <p style="opacity:0.8;max-width:400px;">Optimiza tus solicitudes con nuestra plataforma moderna.</p>
+                <p style="opacity:0.8;max-width:400px;line-height:1.8;">
+                    Optimiza tus solicitudes de inventario con nuestra plataforma moderna y eficiente.
+                </p>
             </div>
         </div>
         <div class="login-right">
@@ -35,59 +39,97 @@
         </div>
     </div>
 
-    <!-- App -->
+    <!-- Main App -->
     <div class="main-app" id="mainApp">
+        <!-- Sidebar -->
         <div class="sidebar">
-            <div class="sidebar-logo"><span class="logo-icon">📦</span><span class="logo-text">LEVO</span></div>
+            <div class="sidebar-logo">
+                <span class="logo-icon">📦</span>
+                <span class="logo-text">LEVO</span>
+            </div>
             <div class="sidebar-menu">
-                <div class="menu-item active"><span class="menu-icon">🛒</span><span class="menu-text">Pedidos</span></div>
+                <div class="menu-item active">
+                    <span class="menu-icon">🛒</span>
+                    <span class="menu-text">Módulo de Pedidos</span>
+                </div>
             </div>
         </div>
+
+        <!-- Header -->
         <div class="app-header">
             <div class="header-title">📦 Módulo de Pedidos</div>
             <div class="header-right">
-                <div class="user-badge"><span>👤</span><span id="userDisplay"></span></div>
+                <div class="user-badge">
+                    <span>👤</span>
+                    <span id="userDisplay"></span>
+                </div>
                 <button class="btn-logout" onclick="logout()">Cerrar Sesión</button>
             </div>
         </div>
+
+        <!-- Content -->
         <div class="app-content">
             <div id="scheduleWarning"></div>
+
+            <!-- Search Bar -->
             <div class="search-container">
                 <div class="search-bar">
-                    <input type="text" id="searchInput" class="search-input" placeholder="🔍 Buscar...">
-                    <button class="btn-search primary" onclick="manualSearch()">🔍 Buscar</button>
-                    <button class="btn-search secondary" onclick="clearSearch()">✖️ Limpiar</button>
+                    <input type="text" id="searchInput" class="search-input" 
+                           placeholder="🔍 Buscar producto...">
+                    <button class="btn-search primary" onclick="manualSearch()" title="Buscar">🔍</button>
+                    <button class="btn-search secondary" onclick="openQRScanner()" title="Escanear QR">📷</button>
+                    <button class="btn-search secondary" onclick="clearSearch()" title="Limpiar">✖️</button>
+                    <div class="sort-dropdown">
+                        <button class="btn-search secondary" onclick="toggleSortMenu()" title="Ordenar">
+                            <span id="sortIcon">⇅</span>
+                        </button>
+                        <div class="sort-menu" id="sortMenu">
+                            <div class="sort-option" onclick="sortProducts('az')">📝 A-Z</div>
+                            <div class="sort-option" onclick="sortProducts('za')">📝 Z-A</div>
+                            <div class="sort-option" onclick="sortProducts('requested')">📊 Más Solicitados</div>
+                            <div class="sort-option" onclick="sortProducts('stock')">📦 Mayor Stock</div>
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            <!-- Products Grid -->
             <div id="productsContainer" class="products-grid"></div>
         </div>
     </div>
 
-    <!-- Modals -->
-    <div id="quantityModal" class="modal">
+    <!-- Modal QR Scanner -->
+    <div id="qrModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="modalTitle">Solicitud</h2>
-                <button class="btn-close" onclick="closeQuantityModal()">&times;</button>
+                <h2>Escanear Código QR</h2>
+                <button class="btn-close" onclick="closeQRScanner()">&times;</button>
             </div>
-            <p><strong>Producto:</strong> <span id="modalProductName"></span></p>
-            <p><strong>Código:</strong> <span id="modalProductCode"></span></p>
-            <input type="number" id="quantityInput" class="quantity-input" step="0.01" min="0.01" value="1">
-            <button class="btn-login" onclick="submitQuantity()">Confirmar</button>
-            <div id="quantityMessage"></div>
+            <div id="qrReader" style="width:100%;"></div>
+            <p style="text-align:center;margin-top:15px;color:#666;">
+                Apunta la cámara al código QR del producto
+            </p>
         </div>
     </div>
 
+    <!-- Modal Historial -->
     <div id="historyModal" class="modal">
         <div class="modal-content">
-            <div class="modal-header"><h2>Historial</h2><button class="btn-close" onclick="closeHistoryModal()">&times;</button></div>
+            <div class="modal-header">
+                <h2>Historial de Solicitudes</h2>
+                <button class="btn-close" onclick="closeHistoryModal()">&times;</button>
+            </div>
             <div id="historyModalBody" class="history-scroll"></div>
         </div>
     </div>
 
+    <!-- Tutorial Modal -->
     <div class="tutorial-overlay" id="tutorialOverlay"></div>
     <div class="tutorial-modal" id="tutorialModal">
-        <div class="tutorial-header"><h2>🎓 Guía de Uso</h2><button class="btn-close" onclick="closeTutorial()">&times;</button></div>
+        <div class="tutorial-header">
+            <h2>🎓 Guía de Uso</h2>
+            <button class="btn-close" onclick="closeTutorial()">&times;</button>
+        </div>
         <div class="tutorial-content" id="tutorialContent"></div>
         <div class="tutorial-dots" id="tutorialDots"></div>
         <div class="tutorial-nav">
@@ -95,6 +137,11 @@
             <button class="btn-search primary" onclick="nextTutorial()">Siguiente →</button>
         </div>
     </div>
+
+    <!-- WhatsApp Floating Button -->
+    <a href="https://wa.me/51999999999?text=Hola,%20necesito%20ayuda%20con%20LEVO" target="_blank" class="whatsapp-float" title="Contactar por WhatsApp">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp">
+    </a>
 
     <script src="app.js"></script>
 </body>
