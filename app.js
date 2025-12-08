@@ -2,7 +2,7 @@
 // LEVO - SISTEMA DE PEDIDOS
 // ============================================
 
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxCSdcwutTIa6l8AASdXjKc7aaDOEAp9zU4oULq2v4yyaQjWtGjPu6LOYTsMjUFyIKH/exec';
+const APPS_SCRIPT_URL = 'TU_URL_DE_APPS_SCRIPT_AQUI';
 
 let currentUser = null;
 let sessionTimeout = null;
@@ -10,9 +10,10 @@ let selectedProduct = null;
 let allProducts = [];
 let userSolicitudes = {};
 let canAddRequests = true;
-let isAdding = true; // true = agregar, false = restar
 let tutorialStep = 0;
 let tutorialImages = [];
+let currentSort = 'default';
+let qrScanner = null;
 
 // ===== INICIALIZACIÓN =====
 window.addEventListener('load', () => {
@@ -149,7 +150,7 @@ function renderProducts(products) {
         for (let i = start; i < end; i++) {
             const p = products[i];
             const solicitado = userSolicitudes[p.codigo] || 0;
-            const disabled = !canAddRequests ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : '';
+            const disabled = !canAddRequests ? 'disabled' : '';
             
             html.push(`
                 <div class="product-card" data-codigo="${p.codigo}">
@@ -162,16 +163,23 @@ function renderProducts(products) {
                         <p>${p.descripcion || ''}</p>
                         <div class="product-badges">
                             <span class="badge badge-stock">Stock: ${p.stock}</span>
-                            ${solicitado !== 0 ? `<span class="badge badge-requested">Solicitado Hoy: ${solicitado}</span>` : ''}
+                            ${solicitado !== 0 ? `<span class="badge badge-requested">Solicitado Hoy: ${solicitado.toFixed(1)}</span>` : ''}
                         </div>
                     </div>
+                    <div class="quantity-control">
+                        <button class="btn-minus" onclick="decrementQuantity('${p.codigo}')" ${disabled}>−</button>
+                        <input type="number" 
+                               id="qty-${p.codigo}" 
+                               class="quantity-input-inline" 
+                               value="${solicitado.toFixed(1)}" 
+                               step="0.1"
+                               min="0"
+                               onchange="validateQuantity('${p.codigo}')"
+                               ${disabled}>
+                        <button class="btn-plus" onclick="incrementQuantity('${p.codigo}')" ${disabled}>+</button>
+                        <button class="btn-confirm" onclick="confirmQuantity('${p.codigo}')" title="Confirmar" ${disabled}>✈️</button>
+                    </div>
                     <div class="product-actions">
-                        <button class="btn-action btn-add" onclick='openQuantityModal(${JSON.stringify(p).replace(/'/g, "&#39;")}, true)' ${disabled}>
-                            ➕ Agregar
-                        </button>
-                        <button class="btn-action btn-subtract" onclick='openQuantityModal(${JSON.stringify(p).replace(/'/g, "&#39;")}, false)' ${disabled}>
-                            ➖ Restar
-                        </button>
                         <button class="btn-action btn-history" onclick="showHistory('${p.codigo}')">
                             📋 Historial
                         </button>
@@ -230,6 +238,7 @@ function manualSearch() {
 function clearSearch() {
     document.getElementById('searchInput').value = '';
     renderProducts(allProducts);
+    document.getElementById('searchInput').focus();
 }
 
 function filterProducts(query) {
@@ -261,51 +270,121 @@ function filterProducts(query) {
     renderProducts(filtered);
 }
 
-// ===== MODAL CANTIDAD =====
-function openQuantityModal(product, adding) {
+// ===== ORDENAMIENTO =====
+function toggleSortMenu() {
+    const menu = document.getElementById('sortMenu');
+    menu.classList.toggle('active');
+}
+
+function sortProducts(type) {
+    currentSort = type;
+    let sorted = [...allProducts];
+    
+    switch(type) {
+        case 'az':
+            sorted.sort((a, b) => a.nombre.localeCompare(b.nombre));
+            document.getElementById('sortIcon').textContent = '🔤';
+            break;
+        case 'za':
+            sorted.sort((a, b) => b.nombre.localeCompare(a.nombre));
+            document.getElementById('sortIcon').textContent = '🔤';
+            break;
+        case 'requested':
+            sorted.sort((a, b) => {
+                const aReq = userSolicitudes[a.codigo] || 0;
+                const bReq = userSolicitudes[b.codigo] || 0;
+                return bReq - aReq;
+            });
+            document.getElementById('sortIcon').textContent = '📊';
+            break;
+        case 'stock':
+            sorted.sort((a, b) => b.stock - a.stock);
+            document.getElementById('sortIcon').textContent = '📦';
+            break;
+    }
+    
+    renderProducts(sorted);
+    document.getElementById('sortMenu').classList.remove('active');
+}
+
+// ===== SCANNER QR =====
+function openQRScanner() {
+    document.getElementById('qrModal').classList.add('active');
+    
+    qrScanner = new Html5Qrcode("qrReader");
+    
+    qrScanner.start(
+        { facingMode: "environment" },
+        {
+            fps: 10,
+            qrbox: { width: 250, height: 250 }
+        },
+        (decodedText) => {
+            document.getElementById('searchInput').value = decodedText;
+            filterProducts(decodedText);
+            closeQRScanner();
+        }
+    ).catch(err => {
+        console.error("Error al iniciar cámara:", err);
+        alert("No se pudo acceder a la cámara. Verifica los permisos.");
+        closeQRScanner();
+    });
+}
+
+function closeQRScanner() {
+    if (qrScanner) {
+        qrScanner.stop().then(() => {
+            qrScanner.clear();
+            qrScanner = null;
+        }).catch(err => console.error(err));
+    }
+    document.getElementById('qrModal').classList.remove('active');
+}
+
+// ===== CONTROLES DE CANTIDAD =====
+function incrementQuantity(codigo) {
+    const input = document.getElementById(`qty-${codigo}`);
+    const current = parseFloat(input.value) || 0;
+    input.value = (current + 1).toFixed(1);
+}
+
+function decrementQuantity(codigo) {
+    const input = document.getElementById(`qty-${codigo}`);
+    const current = parseFloat(input.value) || 0;
+    if (current > 0) {
+        input.value = (current - 1).toFixed(1);
+    }
+}
+
+function validateQuantity(codigo) {
+    const input = document.getElementById(`qty-${codigo}`);
+    let value = parseFloat(input.value);
+    if (isNaN(value) || value < 0) value = 0;
+    input.value = value.toFixed(1);
+}
+
+async function confirmQuantity(codigo) {
+    const input = document.getElementById(`qty-${codigo}`);
+    const newValue = parseFloat(input.value);
+    const oldValue = userSolicitudes[codigo] || 0;
+    const diff = newValue - oldValue;
+    
+    if (diff === 0) {
+        showToast('ℹ️ No hay cambios para registrar');
+        return;
+    }
+    
     if (!canAddRequests) {
-        alert('⏰ Fuera de horario: Las solicitudes solo están disponibles de 7:00 AM a 7:00 PM');
+        alert('⏰ Fuera de horario: Solo de 7:00 AM a 7:00 PM');
         return;
     }
     
-    selectedProduct = product;
-    isAdding = adding;
-    
-    document.getElementById('modalTitle').textContent = adding ? 'Agregar Solicitud' : 'Restar Solicitud';
-    document.getElementById('modalProductName').textContent = product.nombre;
-    document.getElementById('modalProductCode').textContent = product.codigo;
-    document.getElementById('quantityInput').value = '1';
-    document.getElementById('quantityMessage').innerHTML = '';
-    document.getElementById('quantityModal').classList.add('active');
-    
-    setTimeout(() => document.getElementById('quantityInput').focus(), 100);
-}
-
-function closeQuantityModal() {
-    document.getElementById('quantityModal').classList.remove('active');
-    selectedProduct = null;
-}
-
-async function submitQuantity() {
-    const quantity = parseFloat(document.getElementById('quantityInput').value);
-    const msg = document.getElementById('quantityMessage');
-
-    if (!quantity || quantity <= 0) {
-        msg.innerHTML = '<p class="error">Ingrese una cantidad válida</p>';
-        return;
-    }
-
-    msg.innerHTML = '<p style="text-align:center;color:#667eea;">Enviando...</p>';
-
     try {
-        // Si es restar, enviar como negativo
-        const finalQuantity = isAdding ? quantity : -quantity;
-        
         const response = await fetch(`${APPS_SCRIPT_URL}?action=addSolicitud`, {
             method: 'POST',
             body: JSON.stringify({
-                codigo: selectedProduct.codigo,
-                cantidad: finalQuantity,
+                codigo: codigo,
+                cantidad: diff,
                 usuario: currentUser
             })
         });
@@ -313,23 +392,19 @@ async function submitQuantity() {
         const result = await response.json();
 
         if (result.success) {
-            msg.innerHTML = '<p class="success">✓ Registrado correctamente</p>';
+            userSolicitudes[codigo] = newValue;
+            updateProductCard(codigo);
             
-            // Actualizar contador local
-            if (!userSolicitudes[selectedProduct.codigo]) {
-                userSolicitudes[selectedProduct.codigo] = 0;
-            }
-            userSolicitudes[selectedProduct.codigo] += finalQuantity;
+            // Mover foco a barra de búsqueda
+            document.getElementById('searchInput').focus();
             
-            // Actualizar solo el card
-            updateProductCard(selectedProduct.codigo);
-            
-            setTimeout(() => closeQuantityModal(), 800);
+            // Notificación
+            showToast(diff > 0 ? `✓ +${diff.toFixed(1)} agregado` : `✓ ${diff.toFixed(1)} restado`);
         } else {
-            msg.innerHTML = '<p class="error">✗ ' + (result.error || 'Error al registrar') + '</p>';
+            alert('✗ ' + (result.error || 'Error al registrar'));
         }
     } catch (error) {
-        msg.innerHTML = '<p class="error">✗ Error de conexión</p>';
+        alert('✗ Error de conexión');
         console.error(error);
     }
 }
@@ -344,16 +419,40 @@ function updateProductCard(codigo) {
     let requestedBadge = badgesContainer.querySelector('.badge-requested');
     if (solicitado !== 0) {
         if (requestedBadge) {
-            requestedBadge.textContent = `Solicitado Hoy: ${solicitado}`;
+            requestedBadge.textContent = `Solicitado Hoy: ${solicitado.toFixed(1)}`;
         } else {
             const newBadge = document.createElement('span');
             newBadge.className = 'badge badge-requested';
-            newBadge.textContent = `Solicitado Hoy: ${solicitado}`;
+            newBadge.textContent = `Solicitado Hoy: ${solicitado.toFixed(1)}`;
             badgesContainer.appendChild(newBadge);
         }
     } else if (requestedBadge) {
         requestedBadge.remove();
     }
+}
+
+function showToast(message) {
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 100px;
+        right: 30px;
+        background: #27ae60;
+        color: white;
+        padding: 15px 25px;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        z-index: 10000;
+        font-weight: 600;
+        animation: slideInRight 0.3s ease;
+    `;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'fadeOut 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+    }, 2000);
 }
 
 // ===== HISTORIAL =====
@@ -376,14 +475,14 @@ async function showHistory(codigo) {
         const today = new Date().toLocaleDateString('es-PE');
         
         body.innerHTML = history.map(h => {
-            const itemDate = new Date(h.fecha).toLocaleDateString('es-PE');
-            const isToday = itemDate === today;
-            const formattedDate = formatDate(h.fecha);
+            const itemDate = formatDate(h.fecha);
+            const dateOnly = itemDate.split(' ')[0];
+            const isToday = dateOnly === today;
             
             return `
                 <div class="history-item ${isToday ? 'history-today' : 'history-past'}">
                     <p><strong>Cantidad:</strong> ${h.cantidad}</p>
-                    <p><strong>Fecha:</strong> ${formattedDate}</p>
+                    <p><strong>Fecha:</strong> ${itemDate}</p>
                     ${isToday ? '<p style="color:#27ae60;font-weight:600;">📅 Hoy</p>' : ''}
                 </div>
             `;
@@ -436,7 +535,6 @@ async function loadTutorial() {
 function showTutorial() {
     if (tutorialImages.length === 0) return;
     
-    // No mostrar si ya se vio hoy
     const lastSeen = localStorage.getItem('tutorialLastSeen');
     const today = new Date().toDateString();
     if (lastSeen === today) return;
@@ -457,7 +555,6 @@ function renderTutorialStep() {
         <p>${step.descripcion}</p>
     `;
     
-    // Dots
     const dots = tutorialImages.map((_, i) => 
         `<span class="dot ${i === tutorialStep ? 'active' : ''}"></span>`
     ).join('');
@@ -515,9 +612,16 @@ function logout() {
     location.reload();
 }
 
-// ===== CERRAR MODALES CON CLICK FUERA =====
+// ===== CERRAR MODALES Y MENUS =====
 window.onclick = (e) => {
     if (e.target.classList.contains('modal')) {
         e.target.classList.remove('active');
     }
 };
+
+document.addEventListener('click', (e) => {
+    const sortMenu = document.getElementById('sortMenu');
+    if (sortMenu && !e.target.closest('.sort-dropdown')) {
+        sortMenu.classList.remove('active');
+    }
+});
