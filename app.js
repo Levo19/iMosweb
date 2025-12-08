@@ -1,6 +1,5 @@
-
 // ============================================
-// LEVO - SISTEMA DE PEDIDOS CON CATEGORÍAS
+// LEVO - SISTEMA DE PEDIDOS - VERSIÓN CORREGIDA
 // ============================================
 
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxCSdcwutTIa6l8AASdXjKc7aaDOEAp9zU4oULq2v4yyaQjWtGjPu6LOYTsMjUFyIKH/exec';
@@ -10,11 +9,11 @@ let sessionTimeout = null;
 let selectedProduct = null;
 let allProducts = [];
 let userSolicitudes = {};
-let canAddRequests = true;
 let tutorialStep = 0;
 let tutorialImages = [];
 let currentSort = 'default';
 let qrScanner = null;
+let isRendering = false; // CRÍTICO: Prevenir renders múltiples
 
 // ===== INICIALIZACIÓN =====
 window.addEventListener('load', () => {
@@ -79,31 +78,13 @@ async function showMainApp() {
     document.getElementById('mainApp').classList.add('active');
     document.getElementById('userDisplay').textContent = currentUser;
     
-    checkSchedule();
     await loadProducts();
     setupSearch();
     await loadTutorial();
     setTimeout(() => showTutorial(), 1000);
 }
 
-// ===== VERIFICAR HORARIO =====
-function checkSchedule() {
-    const now = new Date();
-    const hour = now.getHours();
-    canAddRequests = hour >= 7 && hour < 19;
-    
-    const warningDiv = document.getElementById('scheduleWarning');
-    if (!canAddRequests) {
-        warningDiv.innerHTML = `
-            <div class="schedule-warning">
-                <span style="font-size:24px;">⏰</span>
-                <span>Fuera de horario: Solo puedes consultar. Las solicitudes están disponibles de 7:00 AM a 7:00 PM</span>
-            </div>
-        `;
-    }
-}
-
-// ===== CARGAR PRODUCTOS CON CATEGORÍAS =====
+// ===== CARGAR PRODUCTOS =====
 async function loadProducts() {
     const container = document.getElementById('productsContainer');
     container.innerHTML = '<div class="loading">Cargando productos...</div>';
@@ -117,8 +98,6 @@ async function loadProducts() {
         allProducts = await productsRes.json();
         const solicitudes = await solicitudesRes.json();
         
-        // El balance ya viene calculado desde el backend
-        // (solicitado - separado - despachado)
         userSolicitudes = {};
         solicitudes.forEach(sol => {
             userSolicitudes[sol.codigo] = sol.cantidad;
@@ -131,78 +110,62 @@ async function loadProducts() {
     }
 }
 
-// ===== RENDERIZAR PRODUCTOS =====
+// ===== RENDERIZAR PRODUCTOS - CORREGIDO (SIN PARPADEO) =====
 function renderProducts(products) {
+    if (isRendering) return; // Prevenir renders múltiples
+    isRendering = true;
+    
     const container = document.getElementById('productsContainer');
     
     if (products.length === 0) {
         container.innerHTML = '<div class="no-results">No se encontraron productos</div>';
+        isRendering = false;
         return;
     }
 
-    const BATCH_SIZE = 50;
-    let currentBatch = 0;
-    
-    const renderBatch = () => {
-        const start = currentBatch * BATCH_SIZE;
-        const end = Math.min(start + BATCH_SIZE, products.length);
-        const html = [];
+    // Renderizar TODO de una vez (sin batches que causan parpadeo)
+    const html = products.map(p => {
+        const balance = userSolicitudes[p.codigo] || 0;
         
-        for (let i = start; i < end; i++) {
-            const p = products[i];
-            const balance = userSolicitudes[p.codigo] || 0;
-            const disabled = !canAddRequests ? 'disabled' : '';
-            
-            html.push(`
-                <div class="product-card" data-codigo="${p.codigo}">
-                    <img src="${p.imagen || 'https://via.placeholder.com/300x200?text=Sin+Imagen'}" 
-                         alt="${p.nombre}" class="product-image" 
-                         onerror="this.src='https://via.placeholder.com/300x200?text=Sin+Imagen'">
-                    <div class="product-info">
-                        <h3>${p.nombre}</h3>
-                        <p><strong>Código:</strong> ${p.codigo}</p>
-                        <p>${p.descripcion || ''}</p>
-                        <div class="product-badges">
-                            <span class="badge badge-stock">Stock: ${p.stock}</span>
-                            ${balance !== 0 ? `<span class="badge badge-requested">Disponible: ${balance.toFixed(1)}</span>` : ''}
-                        </div>
-                    </div>
-                    <div class="quantity-control">
-                        <button class="btn-minus" onclick="decrementQuantity('${p.codigo}')" ${disabled}>−</button>
-                        <input type="number" 
-                               id="qty-${p.codigo}" 
-                               class="quantity-input-inline" 
-                               value="${Math.max(0, balance).toFixed(1)}" 
-                               step="0.1"
-                               min="0"
-                               onchange="validateQuantity('${p.codigo}')"
-                               ${disabled}>
-                        <button class="btn-plus" onclick="incrementQuantity('${p.codigo}')" ${disabled}>+</button>
-                        <button class="btn-confirm" onclick="confirmQuantity('${p.codigo}')" title="Confirmar" ${disabled}>✈️</button>
-                    </div>
-                    <div class="product-actions">
-                        <button class="btn-action btn-history" onclick="showHistory('${p.codigo}')">
-                            📋 Historial
-                        </button>
+        return `
+            <div class="product-card" data-codigo="${p.codigo}">
+                <img src="${p.imagen || 'https://via.placeholder.com/300x200?text=Sin+Imagen'}" 
+                     alt="${p.nombre}" class="product-image" 
+                     onerror="this.src='https://via.placeholder.com/300x200?text=Sin+Imagen'">
+                <div class="product-info">
+                    <h3>${p.nombre}</h3>
+                    <p><strong>Código:</strong> ${p.codigo}</p>
+                    <p>${p.descripcion || ''}</p>
+                    <div class="product-badges">
+                        <span class="badge badge-stock">Stock: ${p.stock}</span>
+                        ${balance !== 0 ? `<span class="badge badge-requested">Disponible: ${balance.toFixed(1)}</span>` : ''}
                     </div>
                 </div>
-            `);
-        }
-        
-        if (currentBatch === 0) {
-            container.innerHTML = html.join('');
-        } else {
-            container.innerHTML += html.join('');
-        }
-        
-        currentBatch++;
-        if (end < products.length) {
-            setTimeout(renderBatch, 10);
-        }
-    };
+                <div class="quantity-control">
+                    <button class="btn-minus" onclick="decrementQuantity('${p.codigo}')">−</button>
+                    <input type="number" 
+                           id="qty-${p.codigo}" 
+                           class="quantity-input-inline" 
+                           value="${Math.max(0, balance).toFixed(1)}" 
+                           step="0.1"
+                           min="0"
+                           onchange="validateQuantity('${p.codigo}')">
+                    <button class="btn-plus" onclick="incrementQuantity('${p.codigo}')">+</button>
+                    <button class="btn-confirm" onclick="confirmQuantity('${p.codigo}')" title="Solicitar">
+                        Solicitar
+                    </button>
+                </div>
+                <div class="product-actions">
+                    <button class="btn-action btn-history" onclick="showHistory('${p.codigo}')">
+                        📋 Historial
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
     
-    currentBatch = 0;
-    renderBatch();
+    container.innerHTML = html;
+    isRendering = false;
 }
 
 // ===== BÚSQUEDA =====
@@ -375,11 +338,6 @@ async function confirmQuantity(codigo) {
         return;
     }
     
-    if (!canAddRequests) {
-        alert('⏰ Fuera de horario: Solo de 7:00 AM a 7:00 PM');
-        return;
-    }
-    
     try {
         const response = await fetch(`${APPS_SCRIPT_URL}?action=addSolicitud`, {
             method: 'POST',
@@ -395,11 +353,7 @@ async function confirmQuantity(codigo) {
         if (result.success) {
             userSolicitudes[codigo] = newValue;
             updateProductCard(codigo);
-            
-            // Mover foco a barra de búsqueda
             document.getElementById('searchInput').focus();
-            
-            // Notificación
             showToast(diff > 0 ? `✓ +${diff.toFixed(1)} agregado` : `✓ ${diff.toFixed(1)} restado`);
         } else {
             alert('✗ ' + (result.error || 'Error al registrar'));
@@ -612,5 +566,3 @@ function logout() {
     if (sessionTimeout) clearTimeout(sessionTimeout);
     location.reload();
 }
-
-// ===== 
