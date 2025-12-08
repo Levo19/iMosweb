@@ -83,15 +83,16 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 
 // ===== MOSTRAR APP =====
 async function showMainApp() {
-    document.getElementById('loginContainer').style.display = 'none';
-    document.getElementById('mainApp').classList.add('active');
+    
+//document.getElementById('loginContainer').style.display = 'none';
+    //document.getElementById('mainApp').classList.add('active');
     document.getElementById('userDisplay').textContent = currentUser;
     
-    checkSchedule();
+   // checkSchedule();
     await loadProducts();
-    setupSearch();
-    await loadTutorial();
-    setTimeout(() => showTutorial(), 1000);
+    //setupSearch();
+    //await loadTutorial();
+    //setTimeout(() => showTutorial(), 1000);
 }
 
 // ===== VERIFICAR HORARIO =====
@@ -148,7 +149,7 @@ function renderProducts(products) {
         return;
     }
 
-    const BATCH_SIZE = 50;
+    const BATCH_SIZE = 5000;
     let currentBatch = 0;
     
     const renderBatch = () => {
@@ -601,6 +602,11 @@ function closeTutorial() {
 
 // ===== SESIÓN (CORREGIDO) =====
 function resetSessionTimeout() {
+    return; // <--- AGREGA ESTO EN LA PRIMERA LÍNEA DE LA FUNCIÓN
+    
+    // ... el resto del código quedará ignorado ...
+
+
     if (sessionTimeout) clearTimeout(sessionTimeout);
     
     sessionTimeout = setTimeout(() => {
