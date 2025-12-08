@@ -1,5 +1,5 @@
 // ============================================
-// LEVO - SISTEMA DE PEDIDOS
+// LEVO - SISTEMA DE PEDIDOS CON CATEGORÍAS
 // ============================================
 
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxCSdcwutTIa6l8AASdXjKc7aaDOEAp9zU4oULq2v4yyaQjWtGjPu6LOYTsMjUFyIKH/exec';
@@ -102,7 +102,7 @@ function checkSchedule() {
     }
 }
 
-// ===== CARGAR PRODUCTOS =====
+// ===== CARGAR PRODUCTOS CON CATEGORÍAS =====
 async function loadProducts() {
     const container = document.getElementById('productsContainer');
     container.innerHTML = '<div class="loading">Cargando productos...</div>';
@@ -116,11 +116,11 @@ async function loadProducts() {
         allProducts = await productsRes.json();
         const solicitudes = await solicitudesRes.json();
         
-        // Calcular totales solicitados HOY
+        // El balance ya viene calculado desde el backend
+        // (solicitado - separado - despachado)
         userSolicitudes = {};
         solicitudes.forEach(sol => {
-            if (!userSolicitudes[sol.codigo]) userSolicitudes[sol.codigo] = 0;
-            userSolicitudes[sol.codigo] += parseFloat(sol.cantidad) || 0;
+            userSolicitudes[sol.codigo] = sol.cantidad;
         });
         
         renderProducts(allProducts);
@@ -149,7 +149,7 @@ function renderProducts(products) {
         
         for (let i = start; i < end; i++) {
             const p = products[i];
-            const solicitado = userSolicitudes[p.codigo] || 0;
+            const balance = userSolicitudes[p.codigo] || 0;
             const disabled = !canAddRequests ? 'disabled' : '';
             
             html.push(`
@@ -163,7 +163,7 @@ function renderProducts(products) {
                         <p>${p.descripcion || ''}</p>
                         <div class="product-badges">
                             <span class="badge badge-stock">Stock: ${p.stock}</span>
-                            ${solicitado !== 0 ? `<span class="badge badge-requested">Solicitado Hoy: ${solicitado.toFixed(1)}</span>` : ''}
+                            ${balance !== 0 ? `<span class="badge badge-requested">Disponible: ${balance.toFixed(1)}</span>` : ''}
                         </div>
                     </div>
                     <div class="quantity-control">
@@ -171,7 +171,7 @@ function renderProducts(products) {
                         <input type="number" 
                                id="qty-${p.codigo}" 
                                class="quantity-input-inline" 
-                               value="${solicitado.toFixed(1)}" 
+                               value="${Math.max(0, balance).toFixed(1)}" 
                                step="0.1"
                                min="0"
                                onchange="validateQuantity('${p.codigo}')"
@@ -413,17 +413,17 @@ function updateProductCard(codigo) {
     const card = document.querySelector(`[data-codigo="${codigo}"]`);
     if (!card) return;
 
-    const solicitado = userSolicitudes[codigo] || 0;
+    const balance = userSolicitudes[codigo] || 0;
     const badgesContainer = card.querySelector('.product-badges');
     
     let requestedBadge = badgesContainer.querySelector('.badge-requested');
-    if (solicitado !== 0) {
+    if (balance !== 0) {
         if (requestedBadge) {
-            requestedBadge.textContent = `Solicitado Hoy: ${solicitado.toFixed(1)}`;
+            requestedBadge.textContent = `Disponible: ${balance.toFixed(1)}`;
         } else {
             const newBadge = document.createElement('span');
             newBadge.className = 'badge badge-requested';
-            newBadge.textContent = `Solicitado Hoy: ${solicitado.toFixed(1)}`;
+            newBadge.textContent = `Disponible: ${balance.toFixed(1)}`;
             badgesContainer.appendChild(newBadge);
         }
     } else if (requestedBadge) {
