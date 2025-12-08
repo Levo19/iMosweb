@@ -15,24 +15,33 @@ let tutorialImages = [];
 let currentSort = 'default';
 let qrScanner = null;
 
-// ===== INICIALIZACIÓN =====
-window.addEventListener('load', () => {
-    checkSession();
-});
-
+// ===== INICIALIZACIÓN (CORREGIDO) =====
 function checkSession() {
-    const session = JSON.parse(localStorage.getItem('session') || 'null');
-    if (session && session.user && session.expiry) {
-        const now = new Date().getTime();
-        if (now < session.expiry) {
-            currentUser = session.user;
-            showMainApp();
-            resetSessionTimeout();
-        } else {
-            localStorage.removeItem('session');
+    try {
+        const sessionStr = localStorage.getItem('session');
+        // Si no hay sesión o es "undefined", salimos
+        if (!sessionStr || sessionStr === "undefined") {
+            return;
         }
+
+        const session = JSON.parse(sessionStr);
+        
+        if (session && session.user && session.expiry) {
+            const now = new Date().getTime();
+            if (now < session.expiry) {
+                currentUser = session.user;
+                showMainApp();
+                resetSessionTimeout();
+            } else {
+                localStorage.removeItem('session'); // Expiró
+            }
+        }
+    } catch (error) {
+        console.error("Error leyendo sesión:", error);
+        localStorage.removeItem('session'); // Borramos datos corruptos
     }
 }
+
 
 // ===== LOGIN =====
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -130,7 +139,7 @@ async function loadProducts() {
     }
 }
 
-// ===== RENDERIZAR PRODUCTOS =====
+// ===== RENDERIZAR PRODUCTOS (CORREGIDO) =====
 function renderProducts(products) {
     const container = document.getElementById('productsContainer');
     
@@ -150,12 +159,14 @@ function renderProducts(products) {
         for (let i = start; i < end; i++) {
             const p = products[i];
             const balance = userSolicitudes[p.codigo] || 0;
-            const disabled = !canAddRequests ? 'disabled' : '';
+            // IMPORTANTE: Aseguramos que disabled sea string vacío si puede agregar
+            const disabledAttr = !canAddRequests ? 'disabled' : ''; 
             
             html.push(`
                 <div class="product-card" data-codigo="${p.codigo}">
                     <img src="${p.imagen || 'https://via.placeholder.com/300x200?text=Sin+Imagen'}" 
                          alt="${p.nombre}" class="product-image" 
+                         loading="lazy" 
                          onerror="this.src='https://via.placeholder.com/300x200?text=Sin+Imagen'">
                     <div class="product-info">
                         <h3>${p.nombre}</h3>
@@ -167,7 +178,7 @@ function renderProducts(products) {
                         </div>
                     </div>
                     <div class="quantity-control">
-                        <button class="btn-minus" onclick="decrementQuantity('${p.codigo}')" ${disabled}>−</button>
+                        <button class="btn-minus" onclick="decrementQuantity('${p.codigo}')" ${disabledAttr}>−</button>
                         <input type="number" 
                                id="qty-${p.codigo}" 
                                class="quantity-input-inline" 
@@ -175,9 +186,9 @@ function renderProducts(products) {
                                step="0.1"
                                min="0"
                                onchange="validateQuantity('${p.codigo}')"
-                               ${disabled}>
-                        <button class="btn-plus" onclick="incrementQuantity('${p.codigo}')" ${disabled}>+</button>
-                        <button class="btn-confirm" onclick="confirmQuantity('${p.codigo}')" title="Confirmar" ${disabled}>✈️</button>
+                               ${disabledAttr}>
+                        <button class="btn-plus" onclick="incrementQuantity('${p.codigo}')" ${disabledAttr}>+</button>
+                        <button class="btn-confirm" onclick="confirmQuantity('${p.codigo}')" title="Confirmar" ${disabledAttr}>✈️</button>
                     </div>
                     <div class="product-actions">
                         <button class="btn-action btn-history" onclick="showHistory('${p.codigo}')">
@@ -188,21 +199,26 @@ function renderProducts(products) {
             `);
         }
         
+        // --- AQUÍ ESTÁ LA MAGIA PARA EVITAR EL PARPADEO ---
         if (currentBatch === 0) {
             container.innerHTML = html.join('');
         } else {
-            container.innerHTML += html.join('');
+            // Usamos insertAdjacentHTML en lugar de innerHTML +=
+            // Esto NO borra los elementos anteriores ni rompe los eventos
+            container.insertAdjacentHTML('beforeend', html.join(''));
         }
         
         currentBatch++;
         if (end < products.length) {
-            setTimeout(renderBatch, 10);
+            // Aumentamos un poco el tiempo para dar respiro al navegador
+            setTimeout(renderBatch, 50); 
         }
     };
     
     currentBatch = 0;
     renderBatch();
 }
+
 
 // ===== BÚSQUEDA =====
 function setupSearch() {
@@ -583,33 +599,39 @@ function closeTutorial() {
     localStorage.setItem('tutorialLastSeen', new Date().toDateString());
 }
 
-// ===== SESIÓN =====
+// ===== SESIÓN (CORREGIDO) =====
 function resetSessionTimeout() {
     if (sessionTimeout) clearTimeout(sessionTimeout);
     
     sessionTimeout = setTimeout(() => {
         logout();
         alert('Tu sesión ha expirado por inactividad');
+        window.location.reload(); // Recargamos para mostrar el login limpio
     }, 4 * 60 * 60 * 1000);
 
-    ['click', 'keypress'].forEach(event => {
-        document.addEventListener(event, () => {
-            if (currentUser) {
-                const session = JSON.parse(localStorage.getItem('session'));
-                if (session) {
-                    session.expiry = new Date().getTime() + (4 * 60 * 60 * 1000);
-                    localStorage.setItem('session', JSON.stringify(session));
-                }
-            }
-        }, { passive: true });
-    });
+    // Eliminamos escuchadores previos para no acumular basura
+    document.removeEventListener('click', extendSession);
+    document.removeEventListener('keypress', extendSession);
+
+    // Agregamos los nuevos
+    document.addEventListener('click', extendSession, { passive: true });
+    document.addEventListener('keypress', extendSession, { passive: true });
 }
 
-function logout() {
-    localStorage.removeItem('session');
-    currentUser = null;
-    if (sessionTimeout) clearTimeout(sessionTimeout);
-    location.reload();
+// Función auxiliar para no redefinirla dentro de resetSessionTimeout
+function extendSession() {
+    if (currentUser) {
+        const sessionStr = localStorage.getItem('session');
+        if (sessionStr) {
+            try {
+                const session = JSON.parse(sessionStr);
+                session.expiry = new Date().getTime() + (4 * 60 * 60 * 1000);
+                localStorage.setItem('session', JSON.stringify(session));
+            } catch (e) {
+                // Ignorar errores silenciosamente en eventos frecuentes
+            }
+        }
+    }
 }
 
 // ===== CERRAR MODALES Y MENUS =====
