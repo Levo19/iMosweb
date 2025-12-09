@@ -122,7 +122,12 @@ function renderProducts(products) {
     }
 
     const html = products.map(p => {
-        const solicitado = userSolicitudes[p.codigo] || 0;
+        // --- CAMBIO IMPORTANTE AQUÍ ---
+        // 1. p.solicitado: El dato que viene guardado del Apps Script (Backend)
+        // 2. userSolicitudes[p.codigo]: Por si el usuario lo acaba de editar localmente
+        // 3. 0: Si no hay nada, es cero.
+        const solicitado = parseFloat(p.solicitado || userSolicitudes[p.codigo] || 0);
+        
         const imagenUrl = (p.imagen && p.imagen.trim() !== '') ? p.imagen : DEFAULT_IMAGE;
         
         return `
@@ -135,13 +140,17 @@ function renderProducts(products) {
                     <h3>${p.nombre}</h3>
                     <p><strong>Código:</strong> ${p.codigo}</p>
                     <p>${p.descripcion || ''}</p>
+                    
                     <div class="product-badges">
                         <span class="badge badge-stock">Stock: ${p.stock}</span>
-                        ${solicitado !== 0 ? `<span class="badge badge-requested">Solicitado: ${solicitado.toFixed(1)}</span>` : ''}
+                        
+                        ${solicitado > 0 ? `<span class="badge badge-requested">Solicitado: ${solicitado.toFixed(1)}</span>` : ''}
                     </div>
                 </div>
+
                 <div class="quantity-control">
                     <button class="btn-minus" onclick="decrementQuantity('${p.codigo}')">−</button>
+                    
                     <input type="number" 
                            id="qty-${p.codigo}" 
                            class="quantity-input-inline" 
@@ -149,11 +158,14 @@ function renderProducts(products) {
                            step="0.1"
                            min="0"
                            onchange="validateQuantity('${p.codigo}')">
+                           
                     <button class="btn-plus" onclick="incrementQuantity('${p.codigo}')">+</button>
+                    
                     <button class="btn-confirm" onclick="confirmQuantity('${p.codigo}')" title="Solicitar">
                         Solicitar
                     </button>
                 </div>
+
                 <div class="product-actions">
                     <button class="btn-action btn-history" onclick="showHistory('${p.codigo}')">
                         📋 Historial
