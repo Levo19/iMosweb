@@ -349,19 +349,32 @@ function validateQuantity(codigo) {
 }
 
 async function confirmQuantity(codigo) {
+    // 1. PREPARACIÓN DE DATOS
     const input = document.getElementById(`qty-${codigo}`);
     const newValue = parseFloat(input.value);
-    const oldValue = userSolicitudes[codigo] || 0;
+    // Guardamos el valor antiguo por si hay que deshacer (Rollback)
+    const oldValue = userSolicitudes[codigo] || 0; 
     const diff = newValue - oldValue;
     
     if (diff === 0) {
         showToast('ℹ️ No hay cambios para registrar');
         return;
     }
+
+    // 2. ACTUALIZACIÓN VISUAL INMEDIATA (OPTIMISTA)
+    // Asumimos éxito y actualizamos todo ya para que se sienta rápido
+    userSolicitudes[codigo] = newValue; 
+    updateProductCard(codigo); 
     
+    // Feedback instantáneo
+    showToast(diff > 0 ? `✓ +${diff.toFixed(1)} agregado` : `✓ ${diff.toFixed(1)} restado`);
+    document.getElementById('searchInput').focus();
+
+    // 3. ENVÍO AL SERVIDOR EN SEGUNDO PLANO
     try {
         const response = await fetch(`${APPS_SCRIPT_URL}?action=addSolicitud`, {
             method: 'POST',
+            keepalive: true, // Intenta guardar aunque cierres la pestaña
             body: JSON.stringify({
                 codigo: codigo,
                 cantidad: diff,
@@ -371,20 +384,27 @@ async function confirmQuantity(codigo) {
 
         const result = await response.json();
 
-        if (result.success) {
-            userSolicitudes[codigo] = newValue;
-            updateProductCard(codigo);
-            document.getElementById('searchInput').focus();
-            showToast(diff > 0 ? `✓ +${diff.toFixed(1)} agregado` : `✓ ${diff.toFixed(1)} restado`);
-        } else {
-            alert('✗ ' + (result.error || 'Error al registrar'));
+        // Si el servidor dice que NO (error de script o lógica)
+        if (!result.success) {
+            throw new Error(result.error || 'El servidor rechazó la solicitud');
         }
+
+        // ÉXITO SILENCIOSO: Si llegamos aquí, todo coincidió. No hacemos nada más.
+
     } catch (error) {
-        alert('✗ Error de conexión');
-        console.error(error);
+        // 4. ROLLBACK (SI ALGO FALLÓ)
+        console.error("Error guardando:", error);
+
+        // Revertimos la memoria local al valor antiguo
+        userSolicitudes[codigo] = oldValue;
+        
+        // Actualizamos la tarjeta para que el usuario vea que el número volvió atrás
+        updateProductCard(codigo);
+        
+        // Alerta intrusiva para que el usuario sepa que su último clic no valió
+        alert('⚠ Error de conexión: No se pudieron guardar los cambios. Se ha restaurado el valor anterior.');
     }
 }
-
 function updateProductCard(codigo) {
     const card = document.querySelector(`[data-codigo="${codigo}"]`);
     if (!card) return;
