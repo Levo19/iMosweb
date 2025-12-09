@@ -1,5 +1,5 @@
 // CONFIGURACIÓN
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxCSdcwutTIa6l8AASdXjKc7aaDOEAp9zU4oULq2v4yyaQjWtGjPu6LOYTsMjUFyIKH/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwMe5h53YfTkRfcOSs1HGK9lV-1MOKSRPfe8gZgkybCSr8963_OkxrIif7oLgqdYtv8/exec';
 const DEFAULT_IMAGE = 'https://raw.githubusercontent.com/Levo19/iMosweb/main/recursos/defaultImageProduct.png';
 
 let currentUser = null;
