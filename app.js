@@ -115,6 +115,9 @@ function renderProducts(products) {
     
     const container = document.getElementById('productsContainer');
     
+    // DEBUG: Verificamos en la consola qué está llegando realmente
+    console.log("Datos recibidos del servidor:", products);
+
     if (products.length === 0) {
         container.innerHTML = '<div class="no-results">No se encontraron productos</div>';
         isRendering = false;
@@ -122,12 +125,20 @@ function renderProducts(products) {
     }
 
     const html = products.map(p => {
-        // --- CAMBIO IMPORTANTE AQUÍ ---
-        // 1. p.solicitado: El dato que viene guardado del Apps Script (Backend)
-        // 2. userSolicitudes[p.codigo]: Por si el usuario lo acaba de editar localmente
-        // 3. 0: Si no hay nada, es cero.
-        const solicitado = parseFloat(p.solicitado || userSolicitudes[p.codigo] || 0);
+        // --- LÓGICA CORREGIDA ---
         
+        // 1. Obtenemos el valor del servidor (asegurando que sea número)
+        // Nota: Si en tu Google Script la variable se llama diferente (ej: 'cantidad'), cambia 'p.solicitado'
+        let serverQty = parseFloat(p.solicitado); 
+        if (isNaN(serverQty)) serverQty = 0;
+
+        // 2. Obtenemos el valor local (si el usuario lo está editando ahora mismo)
+        let localQty = userSolicitudes[p.codigo];
+
+        // 3. DECISIÓN FINAL: ¿Cuál mostramos?
+        // Si existe un valor local (aunque sea 0), usamos ese. Si no, usamos el del servidor.
+        const cantidadFinal = (localQty !== undefined) ? parseFloat(localQty) : serverQty;
+
         const imagenUrl = (p.imagen && p.imagen.trim() !== '') ? p.imagen : DEFAULT_IMAGE;
         
         return `
@@ -144,7 +155,7 @@ function renderProducts(products) {
                     <div class="product-badges">
                         <span class="badge badge-stock">Stock: ${p.stock}</span>
                         
-                        ${solicitado > 0 ? `<span class="badge badge-requested">Solicitado: ${solicitado.toFixed(1)}</span>` : ''}
+                        ${cantidadFinal > 0 ? `<span class="badge badge-requested">Solicitado: ${cantidadFinal.toFixed(1)}</span>` : ''}
                     </div>
                 </div>
 
@@ -154,8 +165,8 @@ function renderProducts(products) {
                     <input type="number" 
                            id="qty-${p.codigo}" 
                            class="quantity-input-inline" 
-                           value="${solicitado.toFixed(1)}" 
-                           step="0.1"
+                           value="${cantidadFinal.toFixed(1)}" 
+                           step="0.5"
                            min="0"
                            onchange="validateQuantity('${p.codigo}')">
                            
@@ -178,7 +189,6 @@ function renderProducts(products) {
     container.innerHTML = html;
     isRendering = false;
 }
-
 // ===== BÚSQUEDA =====
 function setupSearch() {
     const searchInput = document.getElementById('searchInput');
