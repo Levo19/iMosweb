@@ -1,8 +1,6 @@
-// ============================================
-// LEVO - SISTEMA DE PEDIDOS - VERSIÓN CORREGIDA
-// ============================================
-
+// CONFIGURACIÓN
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxCSdcwutTIa6l8AASdXjKc7aaDOEAp9zU4oULq2v4yyaQjWtGjPu6LOYTsMjUFyIKH/exec';
+const DEFAULT_IMAGE = 'https://raw.githubusercontent.com/TU_USUARIO/TU_REPO/main/recursos/defaultImagenProduct.png';
 
 let currentUser = null;
 let sessionTimeout = null;
@@ -126,12 +124,13 @@ function renderProducts(products) {
     // Renderizar TODO de una vez (sin batches que causan parpadeo)
     const html = products.map(p => {
         const balance = userSolicitudes[p.codigo] || 0;
+        const imagenUrl = (p.imagen && p.imagen.trim() !== '') ? p.imagen : DEFAULT_IMAGE;
         
         return `
             <div class="product-card" data-codigo="${p.codigo}">
-                <img src="${p.imagen || 'https://via.placeholder.com/300x200?text=Sin+Imagen'}" 
+                <img src="${imagenUrl}" 
                      alt="${p.nombre}" class="product-image" 
-                     onerror="this.src='https://via.placeholder.com/300x200?text=Sin+Imagen'">
+                     onerror="this.src='${DEFAULT_IMAGE}'">
                 <div class="product-info">
                     <h3>${p.nombre}</h3>
                     <p><strong>Código:</strong> ${p.codigo}</p>
