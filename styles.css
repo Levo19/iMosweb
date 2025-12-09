@@ -498,9 +498,6 @@ body {
 
 .badge-stock { background: #d4edda; color: #155724; }
 .badge-requested { background: #d1ecf1; color: #0c5460; }
-.badge-separado { background: #fff3cd; color: #856404; }
-.badge-despachado { background: #f8d7da; color: #721c24; }
-.badge-balance { background: #d4edff; color: #004085; font-weight: 700; }
 
 /* QUANTITY CONTROLS - AJUSTADOS */
 .quantity-control {
