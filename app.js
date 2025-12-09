@@ -98,7 +98,10 @@ async function loadProducts() {
         
         userSolicitudes = {};
         solicitudes.forEach(sol => {
-            userSolicitudes[sol.codigo] = sol.cantidad;
+            userSolicitudes[sol.codigo] = {
+                balance: sol.cantidad,
+                desglose: sol.desglose || { solicitado: sol.cantidad, separado: 0, despachado: 0 }
+            };
         });
         
         renderProducts(allProducts);
@@ -123,21 +126,26 @@ function renderProducts(products) {
 
     // Renderizar TODO de una vez (sin batches que causan parpadeo)
     const html = products.map(p => {
-        const balance = userSolicitudes[p.codigo] || 0;
+        const solicitudData = userSolicitudes[p.codigo] || { balance: 0, desglose: { solicitado: 0, separado: 0, despachado: 0 } };
+        const balance = solicitudData.balance;
+        const desglose = solicitudData.desglose;
         const imagenUrl = (p.imagen && p.imagen.trim() !== '') ? p.imagen : DEFAULT_IMAGE;
         
         return `
             <div class="product-card" data-codigo="${p.codigo}">
                 <img src="${imagenUrl}" 
                      alt="${p.nombre}" class="product-image" 
-                     onerror="this.src='${DEFAULT_IMAGE}'">
+                     onerror="this.onerror=null; this.src='${DEFAULT_IMAGE}';">
                 <div class="product-info">
                     <h3>${p.nombre}</h3>
                     <p><strong>Código:</strong> ${p.codigo}</p>
                     <p>${p.descripcion || ''}</p>
                     <div class="product-badges">
                         <span class="badge badge-stock">Stock: ${p.stock}</span>
-                        ${balance !== 0 ? `<span class="badge badge-requested">Disponible: ${balance.toFixed(1)}</span>` : ''}
+                        ${desglose.solicitado !== 0 ? `<span class="badge badge-requested">Solicitado: ${desglose.solicitado.toFixed(1)}</span>` : ''}
+                        ${desglose.separado !== 0 ? `<span class="badge badge-separado">Separado: ${desglose.separado.toFixed(1)}</span>` : ''}
+                        ${desglose.despachado !== 0 ? `<span class="badge badge-despachado">Despachado: ${desglose.despachado.toFixed(1)}</span>` : ''}
+                        ${balance !== 0 ? `<span class="badge badge-balance">Disponible: ${balance.toFixed(1)}</span>` : ''}
                     </div>
                 </div>
                 <div class="quantity-control">
@@ -145,7 +153,7 @@ function renderProducts(products) {
                     <input type="number" 
                            id="qty-${p.codigo}" 
                            class="quantity-input-inline" 
-                           value="${Math.max(0, balance).toFixed(1)}" 
+                           value="${balance.toFixed(1)}" 
                            step="0.1"
                            min="0"
                            onchange="validateQuantity('${p.codigo}')">
@@ -329,8 +337,9 @@ function validateQuantity(codigo) {
 async function confirmQuantity(codigo) {
     const input = document.getElementById(`qty-${codigo}`);
     const newValue = parseFloat(input.value);
-    const oldValue = userSolicitudes[codigo] || 0;
-    const diff = newValue - oldValue;
+    const solicitudData = userSolicitudes[codigo] || { balance: 0, desglose: { solicitado: 0, separado: 0, despachado: 0 } };
+    const oldBalance = solicitudData.balance;
+    const diff = newValue - oldBalance;
     
     if (diff === 0) {
         showToast('ℹ️ No hay cambios para registrar');
@@ -350,7 +359,11 @@ async function confirmQuantity(codigo) {
         const result = await response.json();
 
         if (result.success) {
-            userSolicitudes[codigo] = newValue;
+            // Actualizar el desglose local
+            solicitudData.desglose.solicitado += diff;
+            solicitudData.balance = newValue;
+            userSolicitudes[codigo] = solicitudData;
+            
             updateProductCard(codigo);
             document.getElementById('searchInput').focus();
             showToast(diff > 0 ? `✓ +${diff.toFixed(1)} agregado` : `✓ ${diff.toFixed(1)} restado`);
@@ -367,21 +380,47 @@ function updateProductCard(codigo) {
     const card = document.querySelector(`[data-codigo="${codigo}"]`);
     if (!card) return;
 
-    const balance = userSolicitudes[codigo] || 0;
+    const solicitudData = userSolicitudes[codigo] || { balance: 0, desglose: { solicitado: 0, separado: 0, despachado: 0 } };
+    const balance = solicitudData.balance;
+    const desglose = solicitudData.desglose;
     const badgesContainer = card.querySelector('.product-badges');
     
-    let requestedBadge = badgesContainer.querySelector('.badge-requested');
+    // Limpiar badges antiguos de solicitudes
+    badgesContainer.querySelectorAll('.badge-requested, .badge-separado, .badge-despachado, .badge-balance').forEach(b => b.remove());
+    
+    // Agregar badges actualizados
+    if (desglose.solicitado !== 0) {
+        const badge = document.createElement('span');
+        badge.className = 'badge badge-requested';
+        badge.textContent = `Solicitado: ${desglose.solicitado.toFixed(1)}`;
+        badgesContainer.appendChild(badge);
+    }
+    
+    if (desglose.separado !== 0) {
+        const badge = document.createElement('span');
+        badge.className = 'badge badge-separado';
+        badge.textContent = `Separado: ${desglose.separado.toFixed(1)}`;
+        badgesContainer.appendChild(badge);
+    }
+    
+    if (desglose.despachado !== 0) {
+        const badge = document.createElement('span');
+        badge.className = 'badge badge-despachado';
+        badge.textContent = `Despachado: ${desglose.despachado.toFixed(1)}`;
+        badgesContainer.appendChild(badge);
+    }
+    
     if (balance !== 0) {
-        if (requestedBadge) {
-            requestedBadge.textContent = `Disponible: ${balance.toFixed(1)}`;
-        } else {
-            const newBadge = document.createElement('span');
-            newBadge.className = 'badge badge-requested';
-            newBadge.textContent = `Disponible: ${balance.toFixed(1)}`;
-            badgesContainer.appendChild(newBadge);
-        }
-    } else if (requestedBadge) {
-        requestedBadge.remove();
+        const badge = document.createElement('span');
+        badge.className = 'badge badge-balance';
+        badge.textContent = `Disponible: ${balance.toFixed(1)}`;
+        badgesContainer.appendChild(badge);
+    }
+    
+    // Actualizar el input
+    const input = document.getElementById(`qty-${codigo}`);
+    if (input) {
+        input.value = balance.toFixed(1);
     }
 }
 
