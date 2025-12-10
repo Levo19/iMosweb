@@ -728,9 +728,14 @@ body {
 }
 
 .tutorial-content img {
-    width: 100%;
-    border-radius: 10px;
-    margin: 15px 0;
+    display: block;          /* Para que respete los márgenes automáticos */
+    max-width: 100%;         /* No exceder el ancho del contenedor */
+    width: auto;             /* El ancho se ajusta según la altura */
+    height: auto;            /* Mantiene la proporción natural */
+    max-height: 60vh;        /* CLAVE: La imagen nunca superará el 60% del alto de la pantalla */
+    object-fit: contain;     /* Asegura que la imagen entera sea visible sin recortarse */
+    margin: 10px auto;       /* Centra la imagen horizontalmente y reduce un poco el margen vertical */
+    border-radius: 10px;     /* Mantenemos tu borde redondeado */
 }
 
 .tutorial-nav {
