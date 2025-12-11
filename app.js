@@ -15,6 +15,7 @@ let tutorialImages = [];
 let currentSort = 'default';
 let qrScanner = null;
 let isRendering = false; // CRÍTICO: Prevenir renders múltiples
+let historyCache = {}; // Cache para historiales por código
 
 // --- OPTIMIZACIÓN: Pre-carga de productos ---
 // Iniciamos la carga de productos apenas carga el script (en paralelo al login)
@@ -455,6 +456,9 @@ async function confirmQuantity(codigo) {
         return;
     }
 
+    // Invalidamos el caché de historial de este producto porque acabamos de cambiarlo
+    if (historyCache[codigo]) delete historyCache[codigo];
+
     // 2. ACTUALIZACIÓN VISUAL INMEDIATA (OPTIMISTA)
     // Asumimos éxito y actualizamos todo ya para que se sienta rápido
     userSolicitudes[codigo] = newValue;
@@ -561,12 +565,22 @@ async function showHistory(codigo) {
     modal.classList.add('active');
 
     try {
-        // USAMOS currentViewUser
-        const response = await fetch(`${APPS_SCRIPT_URL}?action=getHistory&codigo=${codigo}&usuario=${currentViewUser}`);
-        const history = await response.json();
+        let history;
+
+        // 1. Intentar desde Caché
+        if (historyCache[codigo]) {
+            history = historyCache[codigo];
+            console.log("Historial cargado desde caché");
+        } else {
+            // 2. Si no está en caché, buscar en servidor
+            const response = await fetch(`${APPS_SCRIPT_URL}?action=getHistory&codigo=${codigo}&usuario=${currentViewUser}`);
+            history = await response.json();
+            // Guardar en caché
+            historyCache[codigo] = history;
+        }
 
         if (history.length === 0) {
-            body.innerHTML = '<p class="no-results">No hay solicitudes registradas</p>';
+            body.innerHTML = '<p class="no-results">No hay movimientos registrados</p>';
             return;
         }
 
@@ -577,11 +591,23 @@ async function showHistory(codigo) {
             const dateOnly = itemDate.split(' ')[0];
             const isToday = dateOnly === today;
 
+            // Determinar clase según categoría (solicitado, separado, despachado)
+            const categoria = h.categoria || 'solicitado';
+            const statusClass = `status-${categoria}`;
+
+            let labelCategoria = '';
+            if (categoria === 'separado') labelCategoria = '<span style="color:#e67e22;font-weight:bold;">⏳ Separado</span>';
+            else if (categoria === 'despachado') labelCategoria = '<span style="color:#c0392b;font-weight:bold;">🚀 Despachado</span>';
+            else labelCategoria = '<span style="color:#27ae60;font-weight:bold;">✅ Solicitado</span>';
+
             return `
-                <div class="history-item ${isToday ? 'history-today' : 'history-past'}">
-                    <p><strong>Cantidad:</strong> ${h.cantidad}</p>
-                    <p><strong>Fecha:</strong> ${itemDate}</p>
-                    ${isToday ? '<p style="color:#27ae60;font-weight:600;">📅 Hoy</p>' : ''}
+                <div class="history-item ${statusClass}">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                        <span style="font-size:18px;font-weight:bold;color:#333;">${h.cantidad} un.</span>
+                        ${labelCategoria}
+                    </div>
+                    <p style="font-size:12px;color:#666;">Fecha: ${itemDate}</p>
+                    ${isToday ? '<p style="font-size:11px;color:#27ae60;font-weight:600;margin-top:2px;">📅 Hoy</p>' : ''}
                 </div>
             `;
         }).join('');
