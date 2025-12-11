@@ -471,8 +471,19 @@ async function confirmQuantity(codigo) {
         return;
     }
 
-    // Invalidamos el caché de historial de este producto porque acabamos de cambiarlo
-    if (historyCache[codigo]) delete historyCache[codigo];
+    // 4. ACTUALIZACIÓN OPTIMISTA DEL CACHÉ DE HISTORIAL
+    // En lugar de borrar el caché (que obliga a recargar), agregamos el item manualmente
+    if (historyCache[codigo]) {
+        const now = new Date();
+        // Simulamos la entrada que el servidor creará
+        historyCache[codigo].unshift({
+            codigo: codigo,
+            cantidad: diff,
+            fecha: now.toISOString(), // Formato ISO para que el sort funcione si fuera necesario
+            id: 'temp-' + now.getTime(),
+            categoria: 'solicitado' // Asumimos solicitado por defecto al crear
+        });
+    }
 
     // 2. ACTUALIZACIÓN VISUAL INMEDIATA (OPTIMISTA)
     // Asumimos éxito y actualizamos todo ya para que se sienta rápido
@@ -576,6 +587,15 @@ async function showHistory(codigo) {
     const modal = document.getElementById('historyModal');
     const body = document.getElementById('historyModalBody');
 
+    // Header con botón de imprimir (alineado a la derecha, sin título duplicado)
+    const headerHtml = `
+        <div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:15px;">
+           <button onclick="printHistory('${codigo}')" class="btn-primary">
+              🖨️ Imprimir / PDF
+           </button>
+        </div>
+    `;
+
     body.innerHTML = '<div class="loading">Cargando historial...</div>';
     modal.classList.add('active');
 
@@ -590,23 +610,29 @@ async function showHistory(codigo) {
             // 2. Si no está en caché, buscar en servidor
             const response = await fetch(`${APPS_SCRIPT_URL}?action=getHistory&codigo=${codigo}&usuario=${currentViewUser}`);
             history = await response.json();
-            // Guardar en caché
             historyCache[codigo] = history;
         }
 
         if (history.length === 0) {
-            body.innerHTML = '<p class="no-results">No hay movimientos registrados</p>';
+            body.innerHTML = headerHtml + '<p class="no-results">No hay movimientos registrados</p>';
             return;
         }
 
         const today = new Date().toLocaleDateString('es-PE');
 
-        body.innerHTML = history.map(h => {
-            const itemDate = formatDate(h.fecha);
-            const dateOnly = itemDate.split(' ')[0];
+        const listHtml = history.map(h => {
+            let itemDate;
+            // Manejo robusto de fechas (ISO vs String Apps Script)
+            if (h.fecha.includes('T')) {
+                const d = new Date(h.fecha);
+                itemDate = d.toLocaleString('es-PE'); // Formato local simple
+            } else {
+                itemDate = formatDate(h.fecha);
+            }
+
+            const dateOnly = itemDate.split(' ')[0].replace(',', '');
             const isToday = dateOnly === today;
 
-            // Determinar clase según categoría (solicitado, separado, despachado)
             const categoria = h.categoria || 'solicitado';
             const statusClass = `status-${categoria}`;
 
@@ -626,10 +652,76 @@ async function showHistory(codigo) {
                 </div>
             `;
         }).join('');
+
+        body.innerHTML = headerHtml + '<div class="history-list">' + listHtml + '</div>';
+
     } catch (error) {
         body.innerHTML = '<p class="no-results">Error al cargar historial</p>';
         console.error(error);
     }
+}
+
+function printHistory(codigo) {
+    if (!historyCache[codigo]) return;
+
+    const history = historyCache[codigo];
+    const product = allProducts.find(p => p.codigo === codigo);
+    const productName = product ? product.nombre : codigo;
+
+    // Crear ventana de impresión
+    const printWindow = window.open('', '', 'height=600,width=800');
+
+    let rows = history.map(h => {
+        let dateStr = h.fecha.includes('T') ? new Date(h.fecha).toLocaleString('es-PE') : h.fecha;
+        return `
+            <tr>
+                <td>${dateStr}</td>
+                <td style="text-align:center;font-weight:bold;">${h.cantidad}</td>
+                <td>${h.categoria || 'solicitado'}</td>
+            </tr>
+        `;
+    }).join('');
+
+    printWindow.document.write(`
+        <html>
+            <head>
+                <title>Historial - ${productName}</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; }
+                    h1 { font-size: 18px; margin-bottom: 5px; }
+                    h2 { font-size: 14px; color: #666; margin-bottom: 20px; }
+                    table { width: 100%; border-collapse: collapse; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                    th { background-color: #f2f2f2; }
+                    .footer { margin-top: 30px; font-size: 12px; color: #999; text-align: center; }
+                </style>
+            </head>
+            <body>
+                <h1>Historial de Movimientos</h1>
+                <h2>Producto: ${productName} (${codigo})</h2>
+                <h2>Zona: ${currentViewUser}</h2>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Cantidad</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+                
+                <div class="footer">Generado el ${new Date().toLocaleString('es-PE')}</div>
+                <script>
+                    window.onload = function() { window.print(); window.close(); }
+                </script>
+            </body>
+        </html>
+    `);
+    printWindow.document.close();
 }
 
 function closeHistoryModal() {
