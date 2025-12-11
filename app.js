@@ -1,5 +1,5 @@
 // CONFIGURACIÓN
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxkXFC0Wj1g9oqXuZz_5PWNn4csYvbq6Zq-I-hkq2CcPcRWD-wGONKUFkhMdG0GHCq6/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyAYQCnmQs8Yg4TYMkdJRFDwpg_daow_60q8v0EwheLTynZU7NEC0n9aJ4J7xrAWBmy/exec';
 const DEFAULT_IMAGE = 'https://raw.githubusercontent.com/Levo19/iMosweb/main/recursos/defaultImageProduct.png';
 
 let currentUser = null;          // Usuario logueado (Jefe o Tienda)
@@ -66,7 +66,8 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 
             // DATOS NUEVOS DEL BACKEND
             userRole = result.role || 'tienda';
-            availableZones = result.zonas || [username];
+            // Si viene vacío o null, usar el usuario como fallback
+            availableZones = (result.zonas && result.zonas.length > 0) ? result.zonas : [username];
             currentViewUser = availableZones[0] || username; // Por defecto la primera zona
 
             const expiry = new Date().getTime() + (4 * 60 * 60 * 1000);
