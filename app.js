@@ -16,6 +16,15 @@ let currentSort = 'default';
 let qrScanner = null;
 let isRendering = false; // CRÍTICO: Prevenir renders múltiples
 
+// --- OPTIMIZACIÓN: Pre-carga de productos ---
+// Iniciamos la carga de productos apenas carga el script (en paralelo al login)
+let productsPromise = fetch(`${APPS_SCRIPT_URL}?action=getProducts`)
+    .then(r => r.json())
+    .catch(err => {
+        console.error("Error pre-cargando productos:", err);
+        return [];
+    });
+
 // ===== INICIALIZACIÓN =====
 window.addEventListener('load', () => {
     checkSession();
@@ -67,7 +76,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
             // DATOS NUEVOS DEL BACKEND
             userRole = result.role || 'tienda';
             // Si viene vacío o null, usar el usuario como fallback
-            availableZones = (result.zonas && result.zonas.length > 0) ? result.zonas : [username];
+            availableZones = (result.zonas && result.zonas.length > 0) ? result.zonas : [result.user || username];
             currentViewUser = availableZones[0] || username; // Por defecto la primera zona
 
             const expiry = new Date().getTime() + (4 * 60 * 60 * 1000);
@@ -149,7 +158,7 @@ async function switchZone(zone) {
     // Actualizar UI botones
     renderZoneSelector();
 
-    // Recargar datos
+    // Recargar datos (Optimización: loadProducts solo descargará solicitudes si ya tiene productos)
     document.getElementById('searchInput').value = ''; // Limpiar búsqueda al cambiar
     await loadProducts();
 }
@@ -157,16 +166,28 @@ async function switchZone(zone) {
 // ===== CARGAR PRODUCTOS =====
 async function loadProducts() {
     const container = document.getElementById('productsContainer');
-    container.innerHTML = '<div class="loading">Cargando productos...</div>';
+    // Solo mostrar "Cargando" si no tenemos productos aún
+    if (allProducts.length === 0) {
+        container.innerHTML = '<div class="loading">Cargando productos...</div>';
+    } else {
+        // Si ya hay productos, podemos mostrar un indicador visual menos intrusivo o nada
+        // Opcional: un toast "Actualizando solicitudes..."
+    }
 
     try {
-        // USAMOS currentViewUser EN LUGAR DE currentUser
-        const [productsRes, solicitudesRes] = await Promise.all([
-            fetch(`${APPS_SCRIPT_URL}?action=getProducts`),
-            fetch(`${APPS_SCRIPT_URL}?action=getTodaySolicitudes&usuario=${currentViewUser}`)
-        ]);
+        // 1. Obtener productos (Cacheado o esperar promesa inicial)
+        if (allProducts.length === 0) {
+            allProducts = await productsPromise; // Usar la promesa iniciada al principio
+            if (!allProducts || allProducts.length === 0) {
+                // Si falló la precarga, intentar de nuevo
+                const res = await fetch(`${APPS_SCRIPT_URL}?action=getProducts`);
+                allProducts = await res.json();
+            }
+        }
 
-        allProducts = await productsRes.json();
+        // 2. Obtener solicitudes (Siempre fresco para la zona actual)
+        // NOTA: Esto es mucho más ligero que traer todos los productos
+        const solicitudesRes = await fetch(`${APPS_SCRIPT_URL}?action=getTodaySolicitudes&usuario=${currentViewUser}`);
         const solicitudes = await solicitudesRes.json();
 
         userSolicitudes = {};
