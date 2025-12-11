@@ -189,20 +189,32 @@ async function loadProducts() {
     // Renderizar catálogo base (cantidades en 0 visualmente por ahora)
     renderProducts(allProducts);
 
-    // 2. OBTENER SOLICITUDES (Segundo plano) -> Actualizar UI
+    // 2. OBTENER SOLICITUDES Y PRECARGAR HISTORIAL (Segundo plano)
     try {
-        const solicitudesRes = await fetch(`${APPS_SCRIPT_URL}?action=getTodaySolicitudes&usuario=${currentViewUser}`);
-        const solicitudes = await solicitudesRes.json();
+        // Ejecutamos ambas peticiones en paralelo para máxima velocidad
+        const [solicitudesRes, historyRes] = await Promise.all([
+            fetch(`${APPS_SCRIPT_URL}?action=getTodaySolicitudes&usuario=${currentViewUser}`),
+            fetch(`${APPS_SCRIPT_URL}?action=getAllHistory&usuario=${currentViewUser}`)
+        ]);
 
+        const solicitudes = await solicitudesRes.json();
+        const fullHistory = await historyRes.json();
+
+        // Actualizar caché de hoy
         userSolicitudes = {};
         solicitudes.forEach(sol => {
             userSolicitudes[sol.codigo] = sol.solicitado || 0;
-            // Actualizar tarjeta específica sin recargar todo el grid
             updateProductCard(sol.codigo);
         });
 
+        // Actualizar caché de historial (Precarga masiva)
+        if (fullHistory && typeof fullHistory === 'object') {
+            historyCache = fullHistory;
+            console.log("Historial completo precargado:", Object.keys(historyCache).length, "productos");
+        }
+
     } catch (error) {
-        console.error("Error cargando solicitudes del usuario:", error);
+        console.error("Error cargando datos de usuario:", error);
     }
 }
 
