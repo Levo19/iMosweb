@@ -167,39 +167,42 @@ async function switchZone(zone) {
 // ===== CARGAR PRODUCTOS =====
 async function loadProducts() {
     const container = document.getElementById('productsContainer');
-    // Solo mostrar "Cargando" si no tenemos productos aún
-    if (allProducts.length === 0) {
-        container.innerHTML = '<div class="loading">Cargando productos...</div>';
-    } else {
-        // Si ya hay productos, podemos mostrar un indicador visual menos intrusivo o nada
-        // Opcional: un toast "Actualizando solicitudes..."
-    }
 
-    try {
-        // 1. Obtener productos (Cacheado o esperar promesa inicial)
-        if (allProducts.length === 0) {
-            allProducts = await productsPromise; // Usar la promesa iniciada al principio
+    // 1. OBTENER Y MOSTRAR CATÁLOGO (Inmediato)
+    if (allProducts.length === 0) {
+        container.innerHTML = '<div class="loading">Cargando catálogo...</div>';
+        try {
+            allProducts = await productsPromise;
+            // Retry automático si falló la precarga verificado por longitud
             if (!allProducts || allProducts.length === 0) {
-                // Si falló la precarga, intentar de nuevo
+                console.warn("Precarga vacía, reintentando fetch...");
                 const res = await fetch(`${APPS_SCRIPT_URL}?action=getProducts`);
                 allProducts = await res.json();
             }
+        } catch (e) {
+            console.error("Error crítico cargando productos:", e);
+            container.innerHTML = '<p class="error">Error cargando catálogo.</p>';
+            return;
         }
+    }
 
-        // 2. Obtener solicitudes (Siempre fresco para la zona actual)
-        // NOTA: Esto es mucho más ligero que traer todos los productos
+    // Renderizar catálogo base (cantidades en 0 visualmente por ahora)
+    renderProducts(allProducts);
+
+    // 2. OBTENER SOLICITUDES (Segundo plano) -> Actualizar UI
+    try {
         const solicitudesRes = await fetch(`${APPS_SCRIPT_URL}?action=getTodaySolicitudes&usuario=${currentViewUser}`);
         const solicitudes = await solicitudesRes.json();
 
         userSolicitudes = {};
         solicitudes.forEach(sol => {
             userSolicitudes[sol.codigo] = sol.solicitado || 0;
+            // Actualizar tarjeta específica sin recargar todo el grid
+            updateProductCard(sol.codigo);
         });
 
-        renderProducts(allProducts);
     } catch (error) {
-        container.innerHTML = '<p class="no-results">Error al cargar productos</p>';
-        console.error(error);
+        console.error("Error cargando solicitudes del usuario:", error);
     }
 }
 
