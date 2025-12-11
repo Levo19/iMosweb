@@ -249,7 +249,7 @@ function renderProducts(products) {
         // Si existe un valor local (aunque sea 0), usamos ese. Si no, usamos el del servidor.
         const cantidadFinal = (localQty !== undefined) ? parseFloat(localQty) : serverQty;
 
-        const imagenUrl = (p.imagen && p.imagen.trim() !== '') ? p.imagen : DEFAULT_IMAGE;
+        const imagenUrl = (p.imagen && p.imagen.trim() !== '') ? optimizeGoogleDriveUrl(p.imagen) : DEFAULT_IMAGE;
 
         return `
             <div class="product-card" data-codigo="${p.codigo}">
@@ -844,4 +844,22 @@ function logout() {
     availableZones = [];
     if (sessionTimeout) clearTimeout(sessionTimeout);
     location.reload();
+}
+
+// ===== HELPER IMÁGENES =====
+function optimizeGoogleDriveUrl(url) {
+    if (!url) return url;
+    if (url.includes('lh3.googleusercontent.com')) return url;
+    if (url.includes('drive.google.com') || url.includes('docs.google.com')) {
+        let id = null;
+        const matchId = url.match(/[?&]id=([^&]+)/);
+        if (matchId) {
+            id = matchId[1];
+        } else {
+            const matchD = url.match(/\/d\/([^\/]+)/);
+            if (matchD) id = matchD[1];
+        }
+        if (id) return `https://lh3.googleusercontent.com/d/${id}`;
+    }
+    return url;
 }
