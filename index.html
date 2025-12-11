@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 </head>
+
 <body>
     <!-- Login -->
     <div class="login-container" id="loginContainer">
@@ -68,11 +70,13 @@
 
         <!-- Content -->
         <div class="app-content">
+            <!-- Zone Selector (Jefes) -->
+            <div id="zoneSelectorContainer" class="zone-selector-container"></div>
+
             <!-- Search Bar -->
             <div class="search-container">
                 <div class="search-bar">
-                    <input type="text" id="searchInput" class="search-input" 
-                           placeholder="🔍 Buscar producto...">
+                    <input type="text" id="searchInput" class="search-input" placeholder="🔍 Buscar producto...">
                     <button class="btn-search primary" onclick="manualSearch()" title="Buscar">🔍</button>
                     <button class="btn-search secondary" onclick="openQRScanner()" title="Escanear QR">📷</button>
                     <button class="btn-search secondary" onclick="clearSearch()" title="Limpiar">✖️</button>
@@ -136,10 +140,13 @@
     </div>
 
     <!-- Botón Flotante del Perrito - CORREGIDO DOBLE TAMAÑO -->
-    <a href="https://chat.whatsapp.com/IHlF4Ab31lQH1d0VeEMxQ7?mode=hqrc" target="_blank" class="contact-float" title="¡Comunícanos!">
-        <img src="perrito.png" alt="Comunícanos" onerror="this.onerror=null; this.src='https://raw.githubusercontent.com/Levo19/iMosweb/main/recursos/perrito.png';">
+    <a href="https://chat.whatsapp.com/IHlF4Ab31lQH1d0VeEMxQ7?mode=hqrc" target="_blank" class="contact-float"
+        title="¡Comunícanos!">
+        <img src="perrito.png" alt="Comunícanos"
+            onerror="this.onerror=null; this.src='https://raw.githubusercontent.com/Levo19/iMosweb/main/recursos/perrito.png';">
     </a>
 
     <script src="app.js"></script>
 </body>
+
 </html>
