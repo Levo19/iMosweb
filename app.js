@@ -2,7 +2,10 @@
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwMe5h53YfTkRfcOSs1HGK9lV-1MOKSRPfe8gZgkybCSr8963_OkxrIif7oLgqdYtv8/exec';
 const DEFAULT_IMAGE = 'https://raw.githubusercontent.com/Levo19/iMosweb/main/recursos/defaultImageProduct.png';
 
-let currentUser = null;
+let currentUser = null;          // Usuario logueado (Jefe o Tienda)
+let currentViewUser = null;      // Usuario/Zona que se está visualizando
+let userRole = 'tienda';         // 'tienda' o 'jefe'
+let availableZones = [];         // Lista de zonas disponibles para el jefe
 let sessionTimeout = null;
 let selectedProduct = null;
 let allProducts = [];
@@ -24,6 +27,15 @@ function checkSession() {
         const now = new Date().getTime();
         if (now < session.expiry) {
             currentUser = session.user;
+
+            // RECUPERAR DATOS DE ROL Y ZONA
+            userRole = session.role || 'tienda';
+            availableZones = session.zones || [currentUser];
+
+            // Si hay un 'viewUser' guardado (la zona que estaba viendo), usarlo. 
+            // Si no, usar la primera zona disponible.
+            currentViewUser = session.lastViewUser || availableZones[0] || currentUser;
+
             showMainApp();
             resetSessionTimeout();
         } else {
@@ -46,13 +58,26 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
             method: 'POST',
             body: JSON.stringify({ username, password })
         });
-        
+
         const result = await response.json();
-        
+
         if (result.success) {
             currentUser = username;
+
+            // DATOS NUEVOS DEL BACKEND
+            userRole = result.role || 'tienda';
+            availableZones = result.zonas || [username];
+            currentViewUser = availableZones[0] || username; // Por defecto la primera zona
+
             const expiry = new Date().getTime() + (4 * 60 * 60 * 1000);
-            localStorage.setItem('session', JSON.stringify({ user: username, expiry }));
+            localStorage.setItem('session', JSON.stringify({
+                user: username,
+                expiry: expiry,
+                role: userRole,
+                zones: availableZones,
+                lastViewUser: currentViewUser
+            }));
+
             msg.innerHTML = '<p class="success">✓ Acceso concedido</p>';
             setTimeout(() => {
                 document.getElementById('loginContainer').classList.add('slide-out');
@@ -75,11 +100,57 @@ async function showMainApp() {
     document.getElementById('loginContainer').style.display = 'none';
     document.getElementById('mainApp').classList.add('active');
     document.getElementById('userDisplay').textContent = currentUser;
-    
+
+    // MOSTRAR SELECTOR DE ZONAS SI ES JEFE
+    renderZoneSelector();
+
     await loadProducts();
     setupSearch();
     await loadTutorial();
     setTimeout(() => showTutorial(), 1000);
+}
+
+function renderZoneSelector() {
+    const container = document.getElementById('zoneSelectorContainer');
+    if (!container) return; // Si no existe el contenedor en HTML, salir
+
+    if (userRole === 'jefe' && availableZones.length > 1) {
+        container.style.display = 'flex';
+        container.innerHTML = availableZones.map(zone => `
+            <button class="zone-btn ${zone === currentViewUser ? 'active' : ''}" 
+                    onclick="switchZone('${zone}')">
+                ${zone}
+            </button>
+        `).join('');
+    } else {
+        container.style.display = 'none';
+        // Si solo tiene una zona (o es tienda), mostrarla como título informativo o nada
+        if (availableZones.length === 1 && userRole === 'jefe') {
+            // Opcional: mostrar un indicador de que está viendo esa zona
+            container.style.display = 'flex';
+            container.innerHTML = `<span class="zone-label">Viendo: ${availableZones[0]}</span>`;
+        }
+    }
+}
+
+async function switchZone(zone) {
+    if (zone === currentViewUser) return;
+
+    currentViewUser = zone;
+
+    // Actualizar sesión para recordar selección
+    const session = JSON.parse(localStorage.getItem('session'));
+    if (session) {
+        session.lastViewUser = zone;
+        localStorage.setItem('session', JSON.stringify(session));
+    }
+
+    // Actualizar UI botones
+    renderZoneSelector();
+
+    // Recargar datos
+    document.getElementById('searchInput').value = ''; // Limpiar búsqueda al cambiar
+    await loadProducts();
 }
 
 // ===== CARGAR PRODUCTOS =====
@@ -88,19 +159,20 @@ async function loadProducts() {
     container.innerHTML = '<div class="loading">Cargando productos...</div>';
 
     try {
+        // USAMOS currentViewUser EN LUGAR DE currentUser
         const [productsRes, solicitudesRes] = await Promise.all([
             fetch(`${APPS_SCRIPT_URL}?action=getProducts`),
-            fetch(`${APPS_SCRIPT_URL}?action=getTodaySolicitudes&usuario=${currentUser}`)
+            fetch(`${APPS_SCRIPT_URL}?action=getTodaySolicitudes&usuario=${currentViewUser}`)
         ]);
-        
+
         allProducts = await productsRes.json();
         const solicitudes = await solicitudesRes.json();
-        
+
         userSolicitudes = {};
         solicitudes.forEach(sol => {
             userSolicitudes[sol.codigo] = sol.solicitado || 0;
         });
-        
+
         renderProducts(allProducts);
     } catch (error) {
         container.innerHTML = '<p class="no-results">Error al cargar productos</p>';
@@ -112,9 +184,9 @@ async function loadProducts() {
 function renderProducts(products) {
     if (isRendering) return;
     isRendering = true;
-    
+
     const container = document.getElementById('productsContainer');
-    
+
     // DEBUG: Verificamos en la consola qué está llegando realmente
     console.log("Datos recibidos del servidor:", products);
 
@@ -126,10 +198,10 @@ function renderProducts(products) {
 
     const html = products.map(p => {
         // --- LÓGICA CORREGIDA ---
-        
+
         // 1. Obtenemos el valor del servidor (asegurando que sea número)
         // Nota: Si en tu Google Script la variable se llama diferente (ej: 'cantidad'), cambia 'p.solicitado'
-        let serverQty = parseFloat(p.solicitado); 
+        let serverQty = parseFloat(p.solicitado);
         if (isNaN(serverQty)) serverQty = 0;
 
         // 2. Obtenemos el valor local (si el usuario lo está editando ahora mismo)
@@ -140,7 +212,7 @@ function renderProducts(products) {
         const cantidadFinal = (localQty !== undefined) ? parseFloat(localQty) : serverQty;
 
         const imagenUrl = (p.imagen && p.imagen.trim() !== '') ? p.imagen : DEFAULT_IMAGE;
-        
+
         return `
             <div class="product-card" data-codigo="${p.codigo}">
                 <img src="${imagenUrl}" 
@@ -185,7 +257,7 @@ function renderProducts(products) {
             </div>
         `;
     }).join('');
-    
+
     container.innerHTML = html;
     isRendering = false;
 }
@@ -193,19 +265,19 @@ function renderProducts(products) {
 function setupSearch() {
     const searchInput = document.getElementById('searchInput');
     let typingTimer;
-    
+
     searchInput.addEventListener('input', (e) => {
         clearTimeout(typingTimer);
         const query = e.target.value.trim();
-        
+
         if (!query) {
             renderProducts(allProducts);
             return;
         }
-        
+
         typingTimer = setTimeout(() => filterProducts(query), 300);
     });
-    
+
     searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -235,23 +307,23 @@ function filterProducts(query) {
     const queryLower = query.toLowerCase();
     const queryNorm = queryLower.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const filtered = [];
-    
+
     for (let i = 0; i < allProducts.length; i++) {
         const p = allProducts[i];
-        
+
         if (p.nombre.toLowerCase().indexOf(queryLower) !== -1 ||
             p.codigo.toLowerCase().indexOf(queryLower) !== -1 ||
             (p.descripcion && p.descripcion.toLowerCase().indexOf(queryLower) !== -1)) {
             filtered.push(p);
             continue;
         }
-        
+
         const nombreNorm = p.nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
         if (nombreNorm.indexOf(queryNorm) !== -1) {
             filtered.push(p);
         }
     }
-    
+
     renderProducts(filtered);
 }
 
@@ -264,8 +336,8 @@ function toggleSortMenu() {
 function sortProducts(type) {
     currentSort = type;
     let sorted = [...allProducts];
-    
-    switch(type) {
+
+    switch (type) {
         case 'az':
             sorted.sort((a, b) => a.nombre.localeCompare(b.nombre));
             document.getElementById('sortIcon').textContent = '🔤';
@@ -287,7 +359,7 @@ function sortProducts(type) {
             document.getElementById('sortIcon').textContent = '📦';
             break;
     }
-    
+
     renderProducts(sorted);
     document.getElementById('sortMenu').classList.remove('active');
 }
@@ -295,9 +367,9 @@ function sortProducts(type) {
 // ===== SCANNER QR =====
 function openQRScanner() {
     document.getElementById('qrModal').classList.add('active');
-    
+
     qrScanner = new Html5Qrcode("qrReader");
-    
+
     qrScanner.start(
         { facingMode: "environment" },
         {
@@ -353,9 +425,9 @@ async function confirmQuantity(codigo) {
     const input = document.getElementById(`qty-${codigo}`);
     const newValue = parseFloat(input.value);
     // Guardamos el valor antiguo por si hay que deshacer (Rollback)
-    const oldValue = userSolicitudes[codigo] || 0; 
+    const oldValue = userSolicitudes[codigo] || 0;
     const diff = newValue - oldValue;
-    
+
     if (diff === 0) {
         showToast('ℹ️ No hay cambios para registrar');
         return;
@@ -363,9 +435,9 @@ async function confirmQuantity(codigo) {
 
     // 2. ACTUALIZACIÓN VISUAL INMEDIATA (OPTIMISTA)
     // Asumimos éxito y actualizamos todo ya para que se sienta rápido
-    userSolicitudes[codigo] = newValue; 
-    updateProductCard(codigo); 
-    
+    userSolicitudes[codigo] = newValue;
+    updateProductCard(codigo);
+
     // Feedback instantáneo
     showToast(diff > 0 ? `✓ +${diff.toFixed(1)} agregado` : `✓ ${diff.toFixed(1)} restado`);
     document.getElementById('searchInput').focus();
@@ -378,7 +450,7 @@ async function confirmQuantity(codigo) {
             body: JSON.stringify({
                 codigo: codigo,
                 cantidad: diff,
-                usuario: currentUser
+                usuario: currentViewUser // IMPORTANTE: Enviamos la zona que se está viendo
             })
         });
 
@@ -397,10 +469,10 @@ async function confirmQuantity(codigo) {
 
         // Revertimos la memoria local al valor antiguo
         userSolicitudes[codigo] = oldValue;
-        
+
         // Actualizamos la tarjeta para que el usuario vea que el número volvió atrás
         updateProductCard(codigo);
-        
+
         // Alerta intrusiva para que el usuario sepa que su último clic no valió
         alert('⚠ Error de conexión: No se pudieron guardar los cambios. Se ha restaurado el valor anterior.');
     }
@@ -411,7 +483,7 @@ function updateProductCard(codigo) {
 
     const solicitado = userSolicitudes[codigo] || 0;
     const badgesContainer = card.querySelector('.product-badges');
-    
+
     // Actualizar o crear badge de solicitado
     let requestedBadge = badgesContainer.querySelector('.badge-requested');
     if (solicitado !== 0) {
@@ -426,7 +498,7 @@ function updateProductCard(codigo) {
     } else if (requestedBadge) {
         requestedBadge.remove();
     }
-    
+
     // Actualizar el input
     const input = document.getElementById(`qty-${codigo}`);
     if (input) {
@@ -451,7 +523,7 @@ function showToast(message) {
     `;
     toast.textContent = message;
     document.body.appendChild(toast);
-    
+
     setTimeout(() => {
         toast.style.animation = 'fadeOut 0.3s ease';
         setTimeout(() => toast.remove(), 300);
@@ -462,12 +534,13 @@ function showToast(message) {
 async function showHistory(codigo) {
     const modal = document.getElementById('historyModal');
     const body = document.getElementById('historyModalBody');
-    
+
     body.innerHTML = '<div class="loading">Cargando historial...</div>';
     modal.classList.add('active');
 
     try {
-        const response = await fetch(`${APPS_SCRIPT_URL}?action=getHistory&codigo=${codigo}&usuario=${currentUser}`);
+        // USAMOS currentViewUser
+        const response = await fetch(`${APPS_SCRIPT_URL}?action=getHistory&codigo=${codigo}&usuario=${currentViewUser}`);
         const history = await response.json();
 
         if (history.length === 0) {
@@ -476,12 +549,12 @@ async function showHistory(codigo) {
         }
 
         const today = new Date().toLocaleDateString('es-PE');
-        
+
         body.innerHTML = history.map(h => {
             const itemDate = formatDate(h.fecha);
             const dateOnly = itemDate.split(' ')[0];
             const isToday = dateOnly === today;
-            
+
             return `
                 <div class="history-item ${isToday ? 'history-today' : 'history-past'}">
                     <p><strong>Cantidad:</strong> ${h.cantidad}</p>
@@ -504,20 +577,20 @@ function formatDate(dateString) {
     try {
         if (dateString.includes('T')) {
             const date = new Date(dateString);
-            return date.toLocaleString('es-PE', { 
-                day: '2-digit', 
-                month: '2-digit', 
+            return date.toLocaleString('es-PE', {
+                day: '2-digit',
+                month: '2-digit',
                 year: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit'
             });
         }
-        
+
         const parts = dateString.split(' ');
         if (parts.length >= 2) {
             return `${parts[0]} ${parts[1].substring(0, 5)}`;
         }
-        
+
         return dateString;
     } catch (error) {
         return dateString;
@@ -537,11 +610,11 @@ async function loadTutorial() {
 
 function showTutorial() {
     if (tutorialImages.length === 0) return;
-    
+
     const lastSeen = localStorage.getItem('tutorialLastSeen');
     const today = new Date().toDateString();
     if (lastSeen === today) return;
-    
+
     tutorialStep = 0;
     renderTutorialStep();
     document.getElementById('tutorialOverlay').classList.add('active');
@@ -550,15 +623,15 @@ function showTutorial() {
 
 function renderTutorialStep() {
     if (tutorialImages.length === 0) return;
-    
+
     const step = tutorialImages[tutorialStep];
     document.getElementById('tutorialContent').innerHTML = `
         <h3>${step.titulo}</h3>
         <img src="${step.imagen}" alt="${step.titulo}">
         <p>${step.descripcion}</p>
     `;
-    
-    const dots = tutorialImages.map((_, i) => 
+
+    const dots = tutorialImages.map((_, i) =>
         `<span class="dot ${i === tutorialStep ? 'active' : ''}"></span>`
     ).join('');
     document.getElementById('tutorialDots').innerHTML = dots;
@@ -589,7 +662,7 @@ function closeTutorial() {
 // ===== SESIÓN =====
 function resetSessionTimeout() {
     if (sessionTimeout) clearTimeout(sessionTimeout);
-    
+
     sessionTimeout = setTimeout(() => {
         logout();
         alert('Tu sesión ha expirado por inactividad');
@@ -611,6 +684,9 @@ function resetSessionTimeout() {
 function logout() {
     localStorage.removeItem('session');
     currentUser = null;
+    currentViewUser = null;
+    userRole = 'tienda';
+    availableZones = [];
     if (sessionTimeout) clearTimeout(sessionTimeout);
     location.reload();
 }
