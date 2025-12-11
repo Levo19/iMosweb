@@ -1,5 +1,5 @@
 // CONFIGURACIÓN
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwMe5h53YfTkRfcOSs1HGK9lV-1MOKSRPfe8gZgkybCSr8963_OkxrIif7oLgqdYtv8/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxkXFC0Wj1g9oqXuZz_5PWNn4csYvbq6Zq-I-hkq2CcPcRWD-wGONKUFkhMdG0GHCq6/exec';
 const DEFAULT_IMAGE = 'https://raw.githubusercontent.com/Levo19/iMosweb/main/recursos/defaultImageProduct.png';
 
 let currentUser = null;          // Usuario logueado (Jefe o Tienda)
