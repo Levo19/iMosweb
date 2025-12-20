@@ -711,7 +711,6 @@ function filterProducts(query) {
 }
 
 // ===== ORDENAMIENTO =====
-// ===== ORDENAMIENTO =====
 function toggleSortMode() {
     isSortByToday = !isSortByToday;
     const btn = document.getElementById('btnSortToggle');
