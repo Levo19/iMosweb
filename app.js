@@ -516,7 +516,12 @@ function renderProducts(products) {
              `;
         }
 
-        const stats = userStats[p.codigo] || { solicitado: 0, separado: 0, despachado: 0 };
+        const rawStats = userStats[p.codigo] || {};
+        const stats = {
+            solicitado: rawStats.solicitado || 0,
+            separado: rawStats.separado || 0,
+            despachado: rawStats.despachado || 0
+        };
 
         return `
             <div class="product-card flip-card" data-codigo="${p.codigo}" onclick="flipCard(this)">
