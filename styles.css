@@ -1335,8 +1335,24 @@ body {
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
 }
 
+/* Neon Pulse Keyframes */
+@keyframes neonPulse {
+    0% {
+        box-shadow: 0 0 5px rgba(39, 174, 96, 0.5), 0 0 10px rgba(39, 174, 96, 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 20px rgba(46, 204, 113, 0.8), 0 0 30px rgba(46, 204, 113, 0.5);
+    }
+
+    100% {
+        box-shadow: 0 0 5px rgba(39, 174, 96, 0.5), 0 0 10px rgba(39, 174, 96, 0.3);
+    }
+}
+
 .product-card:hover .flip-card-inner {
-    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+    animation: neonPulse 2s infinite ease-in-out;
+    border: 1px solid #2ecc71;
 }
 
 .product-card.flipped .flip-card-inner {
