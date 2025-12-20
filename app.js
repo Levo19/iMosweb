@@ -12,6 +12,7 @@ let sessionTimeout = null;
 let selectedProduct = null;
 let allProducts = [];
 let userSolicitudes = {};
+let userStats = {}; // { coding: { solicitado, separado, despachado, pendiente } }
 let tutorialStep = 0;
 let tutorialImages = [];
 let currentSort = 'default';
@@ -130,7 +131,9 @@ async function showMainApp() {
     await loadProducts();
     setupSearch();
     await loadTutorial();
-    // Tutorial logic can be module-specific later
+
+    // Auto-Refresh Every 60s (To catch deletions/updates)
+    setInterval(() => loadProducts(true), 60000); // true = silent release
 }
 
 // ===== MODULO SWITCHING =====
@@ -331,26 +334,39 @@ async function loadProducts() {
 
     // 2. OBTENER SOLICITUDES Y PRECARGAR HISTORIAL (Segundo plano)
     try {
-        // Ejecutamos ambas peticiones en paralelo para máxima velocidad
         const [solicitudesRes, historyRes] = await Promise.all([
             fetch(`${APPS_SCRIPT_URL}?action=getTodaySolicitudes&usuario=${currentViewUser}`),
             fetch(`${APPS_SCRIPT_URL}?action=getAllHistory&usuario=${currentViewUser}`)
         ]);
 
-        const solicitudes = await solicitudesRes.json();
+        const solicitudesData = await solicitudesRes.json();
         const fullHistory = await historyRes.json();
 
-        // Actualizar caché de hoy
+        // Actualizar caché de hoy con estadísticas completas
         userSolicitudes = {};
-        solicitudes.forEach(sol => {
-            userSolicitudes[sol.codigo] = sol.solicitado || 0;
-            updateProductCard(sol.codigo);
+        userStats = {};
+
+        solicitudesData.forEach(item => {
+            // "pendiente" calculated in backend or we calc here
+            const pendiente = item.pendiente !== undefined ? item.pendiente : item.solicitado;
+            userSolicitudes[item.codigo] = pendiente; // Keep using this for "En carro" / "Solicitado" badge main view
+
+            // Store full stats for Flip View
+            userStats[item.codigo] = {
+                solicitado: item.solicitado,
+                separado: item.separado,
+                despachado: item.despachado,
+                pendiente: pendiente
+            };
+
+            updateProductCard(item.codigo);
         });
+
+        // Clean up zero entries if needed (backend does this mostly)
 
         // Actualizar caché de historial (Precarga masiva)
         if (fullHistory && typeof fullHistory === 'object') {
             historyCache = fullHistory;
-            console.log("Historial completo precargado:", Object.keys(historyCache).length, "productos");
         }
 
     } catch (error) {
@@ -459,28 +475,101 @@ function renderProducts(products) {
                      alt="${p.nombre}" 
                      class="product-image" 
                      onerror="this.onerror=null; this.src='${DEFAULT_IMAGE}';">
-                <div class="product-info">
-                    <h3>${p.nombre}</h3>
-                    <p><strong>Código:</strong> ${p.codigo}</p>
-                    <p>${p.descripcion || ''}</p>
-                    ${priceHtml}
-                    ${hasPresentations ? '<span class="badge badge-requested">Varias opciones</span>' : ''}
-                    
-                    <div class="product-badges">
-                        <span class="badge badge-stock">Stock: ${p.stock}</span>
-                        ${cantidadFinal > 0 ? `<span class="badge badge-requested">${isPOS ? 'En carro' : 'Solicitado'}: ${cantidadFinal.toFixed(1)}</span>` : ''}
-                    </div>
-                </div>
+        `;
+    }).join(''); // Wait, the above block is truncated in my thought because I saw double `return` in previous view. Let me fix the logic in this rewrite.
 
-                <div class="product-actions" style="padding: 10px 20px;">
-                    ${actionHtml}
+    // I need to be careful. The previous view showed:
+    // 473: <div class="product-card" data-codigo="${p.codigo}"> ...
+    // 478: const stats = userStats[p.codigo] || { solicitado: 0, separado: 0, despachado: 0 };
+    // 481: return ` ...
+    // This implies there was a `return` statement that was returning just the image, and then ANOTHER return statement. 
+    // This is VERY BROKEN. It should be ONE return statement logic.
+    // Ah, lines 473-477 seem to be a leftover fragmet from my previous 'view'.
+    // The REAL code should look like what follows line 480.
+    // I will unite this into a proper single return.
+
+    const htmlFixed = displayProducts.map(p => {
+        let serverQty = parseFloat(p.solicitado);
+        if (isNaN(serverQty)) serverQty = 0;
+        let localQty = userSolicitudes[p.codigo];
+        const cantidadFinal = (localQty !== undefined) ? parseFloat(localQty) : serverQty;
+        const imagenUrl = (p.imagen && p.imagen.trim() !== '') ? optimizeGoogleDriveUrl(p.imagen) : DEFAULT_IMAGE;
+
+        const isPOS = currentModule === 'pos';
+        const hasPresentations = isPOS && (p.presentaciones && p.presentaciones.length > 0);
+        let actionHtml = '';
+
+        if (isPOS) {
+            if (hasPresentations) {
+                actionHtml = `<button class="btn-primary" style="width:100%" onclick="openProductOptions('${p.codigo}')">Seleccionar Opción</button>`;
+            } else {
+                actionHtml = `<div class="quantity-control" style="padding:0; width:100%;">
+                                    <button class="btn-minus" onclick="decrementQuantity('${p.codigo}')">−</button>
+                                    <input type="number" id="qty-${p.codigo}" class="quantity-input-inline" value="${cantidadFinal.toFixed(1)}" step="1" min="0" onchange="validateQuantity('${p.codigo}')">
+                                    <button class="btn-plus" onclick="incrementQuantity('${p.codigo}')">+</button>
+                                    <button class="btn-confirm" onclick="confirmQuantity('${p.codigo}')">Agregar</button>
+                               </div>`;
+            }
+        } else {
+            actionHtml = `
+                <div class="quantity-control">
+                    <button class="btn-minus" onclick="decrementQuantity('${p.codigo}')">−</button>
+                    <input type="number" id="qty-${p.codigo}" class="quantity-input-inline" value="${cantidadFinal.toFixed(1)}" step="0.5" min="0" onchange="validateQuantity('${p.codigo}')">
+                    <button class="btn-plus" onclick="incrementQuantity('${p.codigo}')">+</button>
+                    <button class="btn-confirm" onclick="confirmQuantity('${p.codigo}')" title="Solicitar">Solicitar</button>
+                </div>
+                <div class="product-actions">
+                    <button class="btn-action btn-history" onclick="showHistory('${p.codigo}')">📋 Historial</button>
+                </div>
+             `;
+        }
+
+        const stats = userStats[p.codigo] || { solicitado: 0, separado: 0, despachado: 0 };
+
+        return `
+            <div class="product-card flip-card" data-codigo="${p.codigo}" onclick="flipCard(this)">
+                <div class="flip-card-inner">
+                    <!-- FRONT FACE -->
+                    <div class="flip-card-front">
+                        <img src="${imagenUrl}" alt="${p.nombre}" class="product-image" onerror="this.onerror=null; this.src='${DEFAULT_IMAGE}';">
+                        <div class="product-info">
+                            <h3>${p.nombre}</h3>
+                            <p><strong>Código:</strong> ${p.codigo}</p>
+                            ${isPOS ? `<p class="price" style="font-size:1.2em;color:#27ae60;font-weight:bold;">S/ ${p.precioVenta.toFixed(2)}</p>` : `<p>${p.descripcion || ''}</p>`}
+                            ${hasPresentations ? '<span class="badge badge-requested">Varias opciones</span>' : ''}
+
+                            <div class="product-badges">
+                                <span class="badge badge-stock">Stock: ${p.stock}</span>
+                                ${cantidadFinal > 0 ? `<span class="badge badge-requested">${isPOS ? 'En carro' : 'Solicitado'}: ${cantidadFinal.toFixed(1)}</span>` : ''}
+                            </div>
+                        </div>
+
+                        <div class="product-actions" style="padding: 10px 20px;" onclick="event.stopPropagation()">
+                            ${actionHtml}
+                        </div>
+                    </div>
+
+                    <!-- BACK FACE (STATS) -->
+                    <div class="flip-card-back">
+                        <h3>Estadísticas de Hoy</h3>
+                        <div class="stats-grid">
+                            <div class="stat-item"><span class="stat-label">Solicitado</span><span class="stat-value">${stats.solicitado.toFixed(1)}</span></div>
+                            <div class="stat-item"><span class="stat-label">Separado</span><span class="stat-value">${stats.separado.toFixed(1)}</span></div>
+                            <div class="stat-item"><span class="stat-label">Despachado</span><span class="stat-value">${stats.despachado.toFixed(1)}</span></div>
+                        </div>
+                        <p style="margin-top:20px; font-size:0.8em; opacity:0.8;">Click para volver</p>
+                    </div>
                 </div>
             </div>
         `;
     }).join('');
 
-    container.innerHTML = html;
+    container.innerHTML = htmlFixed;
     isRendering = false;
+}
+
+function flipCard(cardElement) {
+    cardElement.classList.toggle('flipped');
 }
 
 // ===== PRODUCT OPTIONS MODAL =====
@@ -505,12 +594,12 @@ function openProductOptions(codigo) {
             </div>
             <div class="pres-price">S/ ${product.precioVenta.toFixed(2)}</div>
         </div>
-    `;
+        `;
 
     // Extra Presentations
     if (product.presentaciones) {
         html += product.presentaciones.map(pres => `
-            <div class="presentation-option" onclick="selectPresentation('${codigo}', '${pres.nombre}', ${pres.precio}, ${pres.factor})">
+        <div class="presentation-option" onclick="selectPresentation('${codigo}', '${pres.nombre}', ${pres.precio}, ${pres.factor})">
                 <div class="pres-info">
                     <h4>${pres.nombre}</h4>
                     <p>Factor: ${pres.factor}</p>
@@ -842,17 +931,17 @@ function updateProductCard(codigo) {
 function showToast(message) {
     const toast = document.createElement('div');
     toast.style.cssText = `
-        position: fixed;
-        bottom: 100px;
-        right: 30px;
-        background: #27ae60;
-        color: white;
-        padding: 15px 25px;
-        border-radius: 10px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-        z-index: 10000;
-        font-weight: 600;
-        animation: slideInRight 0.3s ease;
+    position: fixed;
+    bottom: 100px;
+    right: 30px;
+    background: #27ae60;
+    color: white;
+    padding: 15px 25px;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    z-index: 10000;
+    font-weight: 600;
+    animation: slideInRight 0.3s ease;
     `;
     toast.textContent = message;
     document.body.appendChild(toast);
@@ -871,11 +960,11 @@ async function showHistory(codigo) {
     // Header con botón de imprimir (alineado a la derecha, sin título duplicado)
     const headerHtml = `
         <div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:15px;">
-           <button onclick="printHistory('${codigo}')" class="btn-primary">
-              🖨️ Imprimir / PDF
-           </button>
+            <button onclick="printHistory('${codigo}')" class="btn-primary">
+                🖨️ Imprimir / PDF
+            </button>
         </div>
-    `;
+        `;
 
     body.innerHTML = '<div class="loading">Cargando historial...</div>';
     modal.classList.add('active');
@@ -923,7 +1012,7 @@ async function showHistory(codigo) {
             else labelCategoria = '<span style="color:#27ae60;font-weight:bold;">✅ Solicitado</span>';
 
             return `
-                <div class="history-item ${statusClass}">
+        <div class="history-item ${statusClass}">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
                         <span style="font-size:18px;font-weight:bold;color:#333;">${h.cantidad} un.</span>
                         ${labelCategoria}
@@ -931,7 +1020,7 @@ async function showHistory(codigo) {
                     <p style="font-size:12px;color:#666;">Fecha: ${itemDate}</p>
                     ${isToday ? '<p style="font-size:11px;color:#27ae60;font-weight:600;margin-top:2px;">📅 Hoy</p>' : ''}
                 </div>
-            `;
+        `;
         }).join('');
 
         body.innerHTML = headerHtml + '<div class="history-list">' + listHtml + '</div>';
@@ -955,7 +1044,7 @@ function printHistory(codigo) {
     let rows = history.map(h => {
         let dateStr = h.fecha.includes('T') ? new Date(h.fecha).toLocaleString('es-PE') : h.fecha;
         return `
-            <tr>
+        <tr>
                 <td>${dateStr}</td>
                 <td style="text-align:center;font-weight:bold;">${h.cantidad}</td>
                 <td>${h.categoria || 'solicitado'}</td>
@@ -1001,7 +1090,7 @@ function printHistory(codigo) {
                 </script>
             </body>
         </html>
-    `);
+        `);
     printWindow.document.close();
 }
 
@@ -1062,10 +1151,10 @@ function renderTutorialStep() {
 
     const step = tutorialImages[tutorialStep];
     document.getElementById('tutorialContent').innerHTML = `
-        <h3>${step.titulo}</h3>
-        <img src="${step.imagen}" alt="${step.titulo}">
-        <p>${step.descripcion}</p>
-    `;
+            <h3>${step.titulo}</h3>
+            <img src="${step.imagen}" alt="${step.titulo}">
+            <p>${step.descripcion}</p>
+        `;
 
     const dots = tutorialImages.map((_, i) =>
         `<span class="dot ${i === tutorialStep ? 'active' : ''}"></span>`
