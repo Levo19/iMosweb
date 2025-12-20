@@ -74,15 +74,8 @@
                         placeholder="Buscar producto o código...">
                     <div class="search-actions">
                         <button class="btn-icon" onclick="openQRScanner()" title="Escanear QR">⚡</button>
-                        <div class="sort-dropdown">
-                            <button class="btn-icon" onclick="toggleSortMenu()" title="Ordenar">⇅</button>
-                            <div class="sort-menu" id="sortMenu">
-                                <div class="sort-option" onclick="sortProducts('az')">📝 A-Z</div>
-                                <div class="sort-option" onclick="sortProducts('za')">📝 Z-A</div>
-                                <div class="sort-option" onclick="sortProducts('requested')">📊 Más Solicitados</div>
-                                <div class="sort-option" onclick="sortProducts('stock')">📦 Mayor Stock</div>
-                            </div>
-                        </div>
+                        <button id="btnSortToggle" class="btn-icon" onclick="toggleSortMode()"
+                            title="Gira: Hoy / A-Z">📋</button>
                     </div>
                 </div>
             </div>
@@ -102,25 +95,6 @@
             <div id="zoneSelectorContainer" class="zone-selector-container"></div>
 
             <!-- Search Bar -->
-            <div class="search-container">
-                <div class="search-bar-wrapper">
-                    <span class="search-icon">🔍</span>
-                    <input type="text" id="searchInput" class="search-input-neon"
-                        placeholder="Buscar producto o código...">
-                    <div class="search-actions">
-                        <button class="btn-icon" onclick="openQRScanner()" title="Escanear QR">⚡</button>
-                        <div class="sort-dropdown">
-                            <button class="btn-icon" onclick="toggleSortMenu()" title="Ordenar">⇅</button>
-                            <div class="sort-menu" id="sortMenu">
-                                <div class="sort-option" onclick="sortProducts('az')">📝 A-Z</div>
-                                <div class="sort-option" onclick="sortProducts('za')">📝 Z-A</div>
-                                <div class="sort-option" onclick="sortProducts('requested')">📊 Más Solicitados</div>
-                                <div class="sort-option" onclick="sortProducts('stock')">📦 Mayor Stock</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             <!-- Products Grid -->
             <div id="productsContainer" class="products-grid"></div>
