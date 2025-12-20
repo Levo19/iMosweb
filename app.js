@@ -773,7 +773,7 @@ async function switchModule(moduleName) {
         `;
         }).join('');
 
-        container.innerHTML = htmlFixed;
+        container.innerHTML = html;
         isRendering = false;
     }
 
@@ -1188,12 +1188,7 @@ async function switchModule(moduleName) {
         badge.style.display = 'flex';
     }
 
-    function toggleCart() {
-        // Placeholder for Cart View
-        // Could open a modal with list of selected items (Separados/Solicitados)
-        // For now, let's just show a toast or alert as "Functional Design" phase.
-        showToast('🛒 Carrito de compras: ' + document.getElementById('cartCount').textContent + ' productos');
-    }
+
 
     function showToast(message) {
         const toast = document.createElement('div');
@@ -1530,7 +1525,7 @@ async function switchModule(moduleName) {
 
     // ===== ANIMATION: FLY TO CART =====
     function flyToCart(codigo) {
-        const card = document.querySelector(`.product-card[data-codigo="${codigo}"]`);
+        const card = document.querySelector(`[data-codigo="${codigo}"]`);
         if (!card) return;
 
         const img = card.querySelector('img');
