@@ -358,14 +358,12 @@ async function loadProducts() {
     }
 }
 
-// ===== RENDERIZAR PRODUCTOS - POS VERSION =====
+// ===== RENDERIZAR PRODUCTOS - MULTI-MODULE =====
 function renderProducts(products) {
     if (isRendering) return;
     isRendering = true;
 
     const container = document.getElementById('productsContainer');
-
-    console.log("Datos recibidos del servidor:", products);
 
     if (products.length === 0) {
         container.innerHTML = '<div class="no-results">No se encontraron productos</div>';
@@ -380,10 +378,59 @@ function renderProducts(products) {
         const cantidadFinal = (localQty !== undefined) ? parseFloat(localQty) : serverQty;
         const imagenUrl = (p.imagen && p.imagen.trim() !== '') ? optimizeGoogleDriveUrl(p.imagen) : DEFAULT_IMAGE;
 
-        // Has Presentations?
-        const hasPresentations = p.presentaciones && p.presentaciones.length > 0;
-        // If has presentations, the main button opens Modal.
-        // If not, standard qty control (implicit "Unidad" or default).
+        // VISUAL LOGIC BASED ON MODULE
+        const isPOS = currentModule === 'pos';
+
+        // Price: Only show in POS
+        const priceHtml = isPOS
+            ? `<p class="price" style="font-size:1.2em;color:#27ae60;font-weight:bold;">S/ ${p.precioVenta.toFixed(2)}</p>`
+            : '';
+
+        // Presentations: Only show in POS if enabled
+        const hasPresentations = isPOS && (p.presentaciones && p.presentaciones.length > 0);
+
+        // Buttons logic
+        let actionHtml = '';
+
+        if (isPOS) {
+            if (hasPresentations) {
+                actionHtml = `<button class="btn-primary" style="width:100%" onclick="openProductOptions('${p.codigo}')">Seleccionar Opción</button>`;
+            } else {
+                actionHtml = `<div class="quantity-control" style="padding:0; width:100%;">
+                                    <button class="btn-minus" onclick="decrementQuantity('${p.codigo}')">−</button>
+                                    <input type="number" id="qty-${p.codigo}" class="quantity-input-inline" value="${cantidadFinal.toFixed(1)}" step="1" min="0" onchange="validateQuantity('${p.codigo}')">
+                                    <button class="btn-plus" onclick="incrementQuantity('${p.codigo}')">+</button>
+                                    <button class="btn-confirm" onclick="confirmQuantity('${p.codigo}')">Agregar</button>
+                               </div>`;
+            }
+        } else {
+            // PEDIDOS MODE: Standard Request + History (Classic View)
+            actionHtml = `
+                <div class="quantity-control">
+                    <button class="btn-minus" onclick="decrementQuantity('${p.codigo}')">−</button>
+                    
+                    <input type="number" 
+                           id="qty-${p.codigo}" 
+                           class="quantity-input-inline" 
+                           value="${cantidadFinal.toFixed(1)}" 
+                           step="0.5"
+                           min="0"
+                           onchange="validateQuantity('${p.codigo}')">
+                           
+                    <button class="btn-plus" onclick="incrementQuantity('${p.codigo}')">+</button>
+                    
+                    <button class="btn-confirm" onclick="confirmQuantity('${p.codigo}')" title="Solicitar">
+                        Solicitar
+                    </button>
+                </div>
+
+                <div class="product-actions">
+                    <button class="btn-action btn-history" onclick="showHistory('${p.codigo}')">
+                        📋 Historial
+                    </button>
+                </div>
+             `;
+        }
 
         return `
             <div class="product-card" data-codigo="${p.codigo}">
@@ -394,25 +441,18 @@ function renderProducts(products) {
                 <div class="product-info">
                     <h3>${p.nombre}</h3>
                     <p><strong>Código:</strong> ${p.codigo}</p>
-                    <p class="price" style="font-size:1.2em;color:#27ae60;font-weight:bold;">S/ ${p.precioVenta.toFixed(2)}</p>
+                    <p>${p.descripcion || ''}</p>
+                    ${priceHtml}
                     ${hasPresentations ? '<span class="badge badge-requested">Varias opciones</span>' : ''}
                     
                     <div class="product-badges">
                         <span class="badge badge-stock">Stock: ${p.stock}</span>
-                        ${cantidadFinal > 0 ? `<span class="badge badge-requested">En carro: ${cantidadFinal.toFixed(1)}</span>` : ''}
+                        ${cantidadFinal > 0 ? `<span class="badge badge-requested">${isPOS ? 'En carro' : 'Solicitado'}: ${cantidadFinal.toFixed(1)}</span>` : ''}
                     </div>
                 </div>
 
                 <div class="product-actions" style="padding: 10px 20px;">
-                    ${hasPresentations
-                ? `<button class="btn-primary" style="width:100%" onclick="openProductOptions('${p.codigo}')">Seleccionar Opción</button>`
-                : `<div class="quantity-control" style="padding:0; width:100%;">
-                                <button class="btn-minus" onclick="decrementQuantity('${p.codigo}')">−</button>
-                                <input type="number" id="qty-${p.codigo}" class="quantity-input-inline" value="${cantidadFinal.toFixed(1)}" step="1" min="0" onchange="validateQuantity('${p.codigo}')">
-                                <button class="btn-plus" onclick="incrementQuantity('${p.codigo}')">+</button>
-                                <button class="btn-confirm" onclick="confirmQuantity('${p.codigo}')">Agregar</button>
-                           </div>`
-            }
+                    ${actionHtml}
                 </div>
             </div>
         `;
