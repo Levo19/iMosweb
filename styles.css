@@ -1211,7 +1211,72 @@ body {
     color: #2e7d32;
 }
 
+/* SELLERS */
+.seller-btn {
+    padding: 15px 25px;
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 100px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+
+.seller-btn:hover {
+    border-color: #667eea;
+    color: #667eea;
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.seller-btn .icon {
+    font-size: 24px;
+}
+
+/* PRESENTATIONS */
+.presentation-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background: #f8f9fa;
+    border: 1px solid #eee;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.presentation-option:hover {
+    background: #f0f4ff;
+    border-color: #667eea;
+}
+
+.pres-info h4 {
+    color: #1e3c72;
+    margin-bottom: 4px;
+}
+
+.pres-info p {
+    color: #666;
+    font-size: 13px;
+}
+
+.pres-price {
+    font-weight: bold;
+    color: #27ae60;
+    font-size: 18px;
+}
+
 /* GENERAL BUTTONS */
+
 .btn-primary {
     padding: 10px 20px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
