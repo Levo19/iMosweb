@@ -203,6 +203,21 @@ async function switchModule(moduleName) {
             cartBtn.classList.remove('active');
         }
     }
+
+    // Optimize POS UI: Hide Search Actions & Enforce Sort
+    const searchActions = document.querySelector('.search-actions');
+    if (searchActions) {
+        if (moduleName === 'pos') {
+            searchActions.style.display = 'none';
+            // Enforce A-Z Sort
+            if (typeof isSortByToday !== 'undefined') isSortByToday = false;
+            const sortBtn = document.getElementById('btnSortToggle');
+            if (sortBtn) sortBtn.classList.remove('active');
+            allProducts.sort((a, b) => a.nombre.localeCompare(b.nombre));
+        } else {
+            searchActions.style.display = 'flex';
+        }
+    }
 }
 
 // ===== POS: SELLER LOGIC =====
@@ -662,8 +677,32 @@ function renderProducts(products) {
             despachado: parseFloat(rawStats.despachado || 0)
         };
 
+        // En POS: Desactivar Flip y Ocultar Reverso (más limpio/rápido)
+        const canFlip = !isPOS ? `onclick="flipCard(this)"` : '';
+        const flipClass = !isPOS ? 'flip-card' : '';
+        const backFaceHtml = !isPOS ? `
+                    <!-- BACK FACE (STATS) -->
+                    <div class="flip-card-back">
+                        <h3>Estadísticas de Hoy</h3>
+                        <div class="stats-grid">
+                            <div class="stat-item"><span class="stat-label">Solicitado</span><span class="stat-value">${stats.solicitado.toFixed(1)}</span></div>
+                            <div class="stat-item"><span class="stat-label">Separado</span><span class="stat-value">${stats.separado.toFixed(1)}</span></div>
+                            <div class="stat-item"><span class="stat-label">Despachado</span><span class="stat-value">${stats.despachado.toFixed(1)}</span></div>
+                        </div>
+
+                        <!-- BOTÓN IMPRIMIR TICKET (80mm) -->
+                        <button class="btn-primary"
+                                style="margin-top:20px; background:#333; font-size:12px; z-index: 10;"
+                                onclick="event.stopPropagation(); printHistory('${p.codigo}')">
+                            🖨️ Imprimir Ticket
+                        </button>
+
+                        <p style="margin-top:15px; font-size:0.8em; opacity:0.8;">Click para volver</p>
+                    </div>
+        ` : '';
+
         return `
-            <div class="product-card flip-card" data-codigo="${p.codigo}" onclick="flipCard(this)">
+            <div class="product-card ${flipClass}" data-codigo="${p.codigo}" ${canFlip}>
                 <div class="flip-card-inner">
                     <!-- FRONT FACE -->
                     <div class="flip-card-front">
@@ -994,7 +1033,17 @@ async function confirmQuantity(codigo, manualQty = null, presentation = null) {
 
     // Feedback instantáneo
     showToast(diff > 0 ? `✓ +${diff.toFixed(1)} agregado` : `✓ ${Math.abs(diff).toFixed(1)} restado`);
+
+    // Animation Fly to Cart
+    if (diff > 0 && typeof flyToCart === 'function') {
+        flyToCart(codigo);
+    }
     if (!manualQty) document.getElementById('searchInput').focus();
+
+    // Trigger Fly Animation if in POS and adding
+    if (currentModule === 'pos' && diff > 0) {
+        flyToCart(codigo);
+    }
 
     // 3. ENVÍO AL SERVIDOR EN SEGUNDO PLANO
     try {
@@ -1451,6 +1500,52 @@ function logout() {
     availableZones = [];
     if (sessionTimeout) clearTimeout(sessionTimeout);
     location.reload();
+}
+
+// ===== ANIMATION: FLY TO CART =====
+function flyToCart(codigo) {
+    const card = document.querySelector(`.product-card[data-codigo="${codigo}"]`);
+    if (!card) return;
+
+    const img = card.querySelector('img');
+    if (!img) return;
+
+    const cartBtn = document.getElementById('floatingCart');
+    if (!cartBtn) return; // Should be visible in POS
+
+    // Clone Image
+    const flyer = img.cloneNode();
+    flyer.classList.add('flying-img');
+
+    // Initial Position
+    const rect = img.getBoundingClientRect();
+    flyer.style.left = rect.left + 'px';
+    flyer.style.top = rect.top + 'px';
+    flyer.style.width = rect.width + 'px';
+    flyer.style.height = rect.height + 'px';
+
+    document.body.appendChild(flyer);
+
+    // Target Position
+    const cartRect = cartBtn.getBoundingClientRect();
+    const targetX = cartRect.left + (cartRect.width / 2) - (rect.width / 2); // Center to cart center
+    const targetY = cartRect.top + (cartRect.height / 2) - (rect.height / 2);
+
+    // Animate
+    // Use requestAnimationFrame to ensure initial style is applied before transition
+    requestAnimationFrame(() => {
+        flyer.style.transform = `translate(${targetX - rect.left}px, ${targetY - rect.top}px) scale(0.1)`;
+        flyer.style.opacity = '0.5';
+    });
+
+    // Cleanup
+    setTimeout(() => {
+        flyer.remove();
+        // Bounce Cart
+        cartBtn.classList.remove('active'); // reset
+        void cartBtn.offsetWidth; // trigger reflow
+        cartBtn.classList.add('active'); // bounce
+    }, 800); // slightly less than transition time
 }
 
 // ===== HELPER IMÁGENES =====
