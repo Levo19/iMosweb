@@ -63,6 +63,30 @@
         <!-- Header -->
         <div class="app-header">
             <div class="header-title">📦 Módulo de Pedidos</div>
+
+            <!-- Search Bar Moved to Header -->
+            <div class="search-container"
+                style="flex: 1; margin: 0 40px; background: transparent; padding: 0; position: static; box-shadow: none;">
+                <div class="search-bar-wrapper"
+                    style="box-shadow: none; border: 1px solid #e0e0e0; background: #f8f9fa;">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="searchInput" class="search-input-neon"
+                        placeholder="Buscar producto o código...">
+                    <div class="search-actions">
+                        <button class="btn-icon" onclick="openQRScanner()" title="Escanear QR">⚡</button>
+                        <div class="sort-dropdown">
+                            <button class="btn-icon" onclick="toggleSortMenu()" title="Ordenar">⇅</button>
+                            <div class="sort-menu" id="sortMenu">
+                                <div class="sort-option" onclick="sortProducts('az')">📝 A-Z</div>
+                                <div class="sort-option" onclick="sortProducts('za')">📝 Z-A</div>
+                                <div class="sort-option" onclick="sortProducts('requested')">📊 Más Solicitados</div>
+                                <div class="sort-option" onclick="sortProducts('stock')">📦 Mayor Stock</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="header-right">
                 <div class="user-badge">
                     <span>👤</span>
