@@ -113,6 +113,41 @@
         </div>
     </div>
 
+    <!-- Modal Seller Selection -->
+    <div id="sellerModal" class="modal" style="z-index: 2500;">
+        <div class="modal-content" style="text-align:center;">
+            <h2>¿Quién eres?</h2>
+            <div id="sellerList" class="seller-list"
+                style="display:flex; flex-wrap:wrap; justify-content:center; gap:15px; margin:20px 0;">
+                <!-- Sellers injected here -->
+            </div>
+            <div class="new-seller-form" style="margin-top:20px; border-top:1px solid #eee; padding-top:20px;">
+                <p style="margin-bottom:10px; color:#666;">¿No estás en la lista?</p>
+                <div style="display:flex; gap:10px; justify-content:center;">
+                    <input type="text" id="newSellerName" placeholder="Tu nombre"
+                        style="padding:10px; border-radius:8px; border:1px solid #ccc;">
+                    <button class="btn-primary" onclick="startNewSellerSession()">Ingresar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Product Options -->
+    <div id="productOptionsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalProductName">Producto</h2>
+                <button class="btn-close" onclick="closeProductOptions()">&times;</button>
+            </div>
+            <div class="product-preview" style="text-align:center; margin-bottom:20px;">
+                <img id="modalProductImage" src="" style="height:150px; object-fit:contain;">
+            </div>
+            <div id="modalPresentations" class="presentation-list">
+                <!-- Options injected here -->
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Historial -->
     <div id="historyModal" class="modal">
         <div class="modal-content">
