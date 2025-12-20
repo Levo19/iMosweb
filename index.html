@@ -118,7 +118,11 @@
     <!-- Modal Seller Selection -->
     <div id="sellerModal" class="modal" style="z-index: 2500;">
         <div class="modal-content" style="text-align:center;">
-            <h2>¿Quién eres?</h2>
+            <div style="position:relative;">
+                <h2>¿Quién eres?</h2>
+                <button class="btn-icon" onclick="closeSellerModal()"
+                    style="position:absolute; top:-10px; right:0; background:none; color:#666; font-size:1.5em;">✕</button>
+            </div>
             <div id="sellerList" class="seller-list"
                 style="display:flex; flex-wrap:wrap; justify-content:center; gap:15px; margin:20px 0;">
                 <!-- Sellers injected here -->
@@ -183,7 +187,7 @@
             onerror="this.onerror=null; this.src='https://raw.githubusercontent.com/Levo19/iMosweb/main/recursos/perrito.png';">
     </a>
 
-    <script src="app.js?v=3"></script>
+    <script src="app.js?v=4"></script>
 </body>
 
 </html>
