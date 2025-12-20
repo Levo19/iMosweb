@@ -1297,3 +1297,138 @@ body {
     transform: translateY(-2px);
     box-shadow: 0 7px 14px rgba(50, 50, 93, 0.1), 0 3px 6px rgba(0, 0, 0, 0.08);
 }
+
+/* ========================================== */
+/* FLIP CARD STYLES (NEW - FIXES BACK FACE)   */
+/* ========================================== */
+
+/* 1. Contenedor Principal (Tarjeta) */
+.product-card {
+    /* Necesitamos altura fija porque los hijos serán absolutos */
+    min-height: 550px;
+    perspective: 1000px;
+    /* Efecto 3D */
+    position: relative;
+
+    /* Removemos estilos visuales del contenedor padre, pasan al inner */
+    background: transparent !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+    /* Permitir que el 3D "salga" si es necesario */
+    transition: transform 0.3s ease;
+    /* Solo para el hover lift del padre */
+}
+
+/* Efecto Lift al pasar el mouse (sobre el contenedor total) */
+.product-card:hover {
+    transform: translateY(-5px);
+    z-index: 10;
+}
+
+/* 2. Contenedor Interno (El que rota) */
+.flip-card-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    text-align: left;
+    transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    /* Animación suave con rebote */
+    transform-style: preserve-3d;
+
+    /* Estilos visuales de la tarjeta (fondo, sombra, bordes) */
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+}
+
+.product-card:hover .flip-card-inner {
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+}
+
+/* 3. Estado "GIRADO" */
+.product-card.flipped .flip-card-inner {
+    transform: rotateY(180deg);
+}
+
+/* 4. Caras de la tarjeta (Frente y Dorso) */
+.flip-card-front,
+.flip-card-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    -webkit-backface-visibility: hidden;
+    /* Safari */
+    backface-visibility: hidden;
+    border-radius: 15px;
+    top: 0;
+    left: 0;
+    overflow: hidden;
+}
+
+/* FRENTE */
+.flip-card-front {
+    background-color: white;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    /* Asegurar que el contenido se distribuya bien */
+}
+
+/* DORSO */
+.flip-card-back {
+    background: linear-gradient(135deg, #fff 0%, #f3f4f6 100%);
+    transform: rotateY(180deg);
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 25px;
+    text-align: center;
+    border: 2px solid #e0e0e0;
+    /* Un borde sutil para el reverso */
+}
+
+/* Estilos de las Estadísticas en el Dorso */
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 15px;
+    width: 100%;
+    margin-top: 20px;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    background: white;
+    border-radius: 10px;
+    border: 1px solid #eee;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+}
+
+.stat-label {
+    font-size: 14px;
+    color: #666;
+    font-weight: 600;
+}
+
+.stat-value {
+    font-size: 18px;
+    font-weight: 800;
+    color: #1e3c72;
+}
+
+.flip-card-back h3 {
+    margin-bottom: 20px;
+    color: #1e3c72;
+}
+
+/* Ajuste para que el botón de acción quede abajo en el frente */
+.product-actions {
+    margin-top: auto;
+    /* Empuja los botones al fondo */
+}
