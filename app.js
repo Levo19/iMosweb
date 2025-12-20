@@ -4,6 +4,7 @@ const DEFAULT_IMAGE = 'https://raw.githubusercontent.com/Levo19/iMosweb/main/rec
 
 let currentUser = null;          // Usuario logueado (Jefe o Tienda)
 let currentViewUser = null;      // Usuario/Zona que se está visualizando
+let currentSeller = null;        // VENDEDOR ACTIVO (e.g., 'Luis')
 let userRole = 'tienda';         // 'tienda' o 'jefe'
 let availableZones = [];         // Lista de zonas disponibles para el jefe
 let sessionTimeout = null;
@@ -46,6 +47,9 @@ function checkSession() {
             // Si no, usar la primera zona disponible.
             currentViewUser = session.lastViewUser || availableZones[0] || currentUser;
 
+            // POS: Recuperar vendedor si existe en local
+            currentSeller = session.seller || null;
+
             showMainApp();
             resetSessionTimeout();
         } else {
@@ -86,7 +90,8 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
                 expiry: expiry,
                 role: userRole,
                 zones: availableZones,
-                lastViewUser: currentViewUser
+                lastViewUser: currentViewUser,
+                seller: null // Reset seller on fresh login
             }));
 
             msg.innerHTML = '<p class="success">✓ Acceso concedido</p>';
@@ -115,11 +120,119 @@ async function showMainApp() {
     // MOSTRAR SELECTOR DE ZONAS SI ES JEFE
     renderZoneSelector();
 
+    // POS: SELLER CHECK
+    // Si no tenemos vendedor definido (y es una zona de ventas común), preguntar
+    if (!currentSeller) {
+        await handleSellerCheck();
+    } else {
+        updateUserDisplay();
+    }
+
     await loadProducts();
     setupSearch();
     await loadTutorial();
-    setTimeout(() => showTutorial(), 1000);
+    // Sólo mostrar tutorial si ya pasamos el check de vendedor
+    if (currentSeller) setTimeout(() => showTutorial(), 1000);
 }
+
+// ===== POS: SELLER LOGIC =====
+async function handleSellerCheck() {
+    const modal = document.getElementById('sellerModal');
+    const container = document.getElementById('sellerList');
+
+    modal.classList.add('active');
+    container.innerHTML = '<div class="loading">Cargando vendedores...</div>';
+
+    try {
+        const res = await fetch(`${APPS_SCRIPT_URL}?action=getActiveSellers&zone=${currentViewUser}`);
+        const sellers = await res.json();
+
+        if (sellers.length === 0) {
+            container.innerHTML = '<p style="width:100%;color:#999;">No hay vendedores activos. Ingresa tu nombre abajo.</p>';
+        } else {
+            container.innerHTML = sellers.map(name => `
+                <div class="seller-btn" onclick="selectSeller('${name}')">
+                    <span class="icon">👤</span>
+                    <span>${name}</span>
+                </div>
+            `).join('');
+        }
+    } catch (e) {
+        console.error("Error fetching sellers:", e);
+        container.innerHTML = '<p class="error">Error de conexión</p>';
+    }
+}
+
+function selectSeller(name) {
+    currentSeller = name;
+    updateSessionSeller(name);
+    document.getElementById('sellerModal').classList.remove('active');
+    updateUserDisplay();
+    showToast(`Hola, ${name} 👋`);
+}
+
+async function startNewSellerSession() {
+    const input = document.getElementById('newSellerName');
+    const name = input.value.trim();
+    if (!name) return alert('Por favor ingresa un nombre');
+
+    // Optimist
+    selectSeller(name);
+
+    // Register in backend
+    fetch(`${APPS_SCRIPT_URL}?action=registerSeller`, {
+        method: 'POST',
+        body: JSON.stringify({ zone: currentViewUser, name: name })
+    });
+}
+
+function updateSessionSeller(name) {
+    const session = JSON.parse(localStorage.getItem('session'));
+    if (session) {
+        session.seller = name;
+        localStorage.setItem('session', JSON.stringify(session));
+    }
+}
+
+function updateUserDisplay() {
+    const disp = document.getElementById('userDisplay');
+    if (currentSeller) {
+        disp.innerHTML = `<span>👤</span> ${currentSeller} <small style="opacity:0.7">(${currentViewUser})</small>`;
+        // Add Close Register Button nearby if not exists?
+        // Actually we can reuse 'Logout' text or add a sub-option.
+        // For now, let's keep it simple.
+        const headerRight = document.querySelector('.header-right');
+        if (!document.getElementById('btnCloseReg')) {
+            const btn = document.createElement('button');
+            btn.id = 'btnCloseReg';
+            btn.className = 'btn-search secondary';
+            btn.style.padding = '8px 12px';
+            btn.style.fontSize = '12px';
+            btn.innerText = 'Cerrar Caja';
+            btn.onclick = closeRegister;
+            headerRight.insertBefore(btn, headerRight.firstChild);
+        }
+    } else {
+        disp.textContent = currentUser;
+    }
+}
+
+function closeRegister() {
+    if (!confirm('¿Cerrar caja y sesión de vendedor?')) return;
+
+    const oldSeller = currentSeller;
+    currentSeller = null;
+    updateSessionSeller(null);
+
+    // Remove from backend list
+    fetch(`${APPS_SCRIPT_URL}?action=removeSeller`, {
+        method: 'POST',
+        body: JSON.stringify({ zone: currentViewUser, name: oldSeller })
+    });
+
+    location.reload(); // Reload to force seller check again
+}
+
 
 function renderZoneSelector() {
     const container = document.getElementById('zoneSelectorContainer');
@@ -148,6 +261,8 @@ async function switchZone(zone) {
     if (zone === currentViewUser) return;
 
     currentViewUser = zone;
+    currentSeller = null; // Reset seller when switching zones
+    updateSessionSeller(null);
 
     // Actualizar sesión para recordar selección
     const session = JSON.parse(localStorage.getItem('session'));
@@ -159,9 +274,8 @@ async function switchZone(zone) {
     // Actualizar UI botones
     renderZoneSelector();
 
-    // Recargar datos (Optimización: loadProducts solo descargará solicitudes si ya tiene productos)
-    document.getElementById('searchInput').value = ''; // Limpiar búsqueda al cambiar
-    await loadProducts();
+    // Force Reload to trigger seller check for new zone
+    location.reload();
 }
 
 // ===== CARGAR PRODUCTOS =====
@@ -218,14 +332,13 @@ async function loadProducts() {
     }
 }
 
-// ===== RENDERIZAR PRODUCTOS - CORREGIDO (SIN PARPADEO) =====
+// ===== RENDERIZAR PRODUCTOS - POS VERSION =====
 function renderProducts(products) {
     if (isRendering) return;
     isRendering = true;
 
     const container = document.getElementById('productsContainer');
 
-    // DEBUG: Verificamos en la consola qué está llegando realmente
     console.log("Datos recibidos del servidor:", products);
 
     if (products.length === 0) {
@@ -235,21 +348,16 @@ function renderProducts(products) {
     }
 
     const html = products.map(p => {
-        // --- LÓGICA CORREGIDA ---
-
-        // 1. Obtenemos el valor del servidor (asegurando que sea número)
-        // Nota: Si en tu Google Script la variable se llama diferente (ej: 'cantidad'), cambia 'p.solicitado'
         let serverQty = parseFloat(p.solicitado);
         if (isNaN(serverQty)) serverQty = 0;
-
-        // 2. Obtenemos el valor local (si el usuario lo está editando ahora mismo)
         let localQty = userSolicitudes[p.codigo];
-
-        // 3. DECISIÓN FINAL: ¿Cuál mostramos?
-        // Si existe un valor local (aunque sea 0), usamos ese. Si no, usamos el del servidor.
         const cantidadFinal = (localQty !== undefined) ? parseFloat(localQty) : serverQty;
-
         const imagenUrl = (p.imagen && p.imagen.trim() !== '') ? optimizeGoogleDriveUrl(p.imagen) : DEFAULT_IMAGE;
+
+        // Has Presentations?
+        const hasPresentations = p.presentaciones && p.presentaciones.length > 0;
+        // If has presentations, the main button opens Modal.
+        // If not, standard qty control (implicit "Unidad" or default).
 
         return `
             <div class="product-card" data-codigo="${p.codigo}">
@@ -260,37 +368,25 @@ function renderProducts(products) {
                 <div class="product-info">
                     <h3>${p.nombre}</h3>
                     <p><strong>Código:</strong> ${p.codigo}</p>
-                    <p>${p.descripcion || ''}</p>
+                    <p class="price" style="font-size:1.2em;color:#27ae60;font-weight:bold;">S/ ${p.precioVenta.toFixed(2)}</p>
+                    ${hasPresentations ? '<span class="badge badge-requested">Varias opciones</span>' : ''}
                     
                     <div class="product-badges">
                         <span class="badge badge-stock">Stock: ${p.stock}</span>
-                        
-                        ${cantidadFinal > 0 ? `<span class="badge badge-requested">Solicitado: ${cantidadFinal.toFixed(1)}</span>` : ''}
+                        ${cantidadFinal > 0 ? `<span class="badge badge-requested">En carro: ${cantidadFinal.toFixed(1)}</span>` : ''}
                     </div>
                 </div>
 
-                <div class="quantity-control">
-                    <button class="btn-minus" onclick="decrementQuantity('${p.codigo}')">−</button>
-                    
-                    <input type="number" 
-                           id="qty-${p.codigo}" 
-                           class="quantity-input-inline" 
-                           value="${cantidadFinal.toFixed(1)}" 
-                           step="0.5"
-                           min="0"
-                           onchange="validateQuantity('${p.codigo}')">
-                           
-                    <button class="btn-plus" onclick="incrementQuantity('${p.codigo}')">+</button>
-                    
-                    <button class="btn-confirm" onclick="confirmQuantity('${p.codigo}')" title="Solicitar">
-                        Solicitar
-                    </button>
-                </div>
-
-                <div class="product-actions">
-                    <button class="btn-action btn-history" onclick="showHistory('${p.codigo}')">
-                        📋 Historial
-                    </button>
+                <div class="product-actions" style="padding: 10px 20px;">
+                    ${hasPresentations
+                ? `<button class="btn-primary" style="width:100%" onclick="openProductOptions('${p.codigo}')">Seleccionar Opción</button>`
+                : `<div class="quantity-control" style="padding:0; width:100%;">
+                                <button class="btn-minus" onclick="decrementQuantity('${p.codigo}')">−</button>
+                                <input type="number" id="qty-${p.codigo}" class="quantity-input-inline" value="${cantidadFinal.toFixed(1)}" step="1" min="0" onchange="validateQuantity('${p.codigo}')">
+                                <button class="btn-plus" onclick="incrementQuantity('${p.codigo}')">+</button>
+                                <button class="btn-confirm" onclick="confirmQuantity('${p.codigo}')">Agregar</button>
+                           </div>`
+            }
                 </div>
             </div>
         `;
@@ -299,6 +395,79 @@ function renderProducts(products) {
     container.innerHTML = html;
     isRendering = false;
 }
+
+// ===== PRODUCT OPTIONS MODAL =====
+function openProductOptions(codigo) {
+    const product = allProducts.find(p => p.codigo === codigo);
+    if (!product) return;
+
+    selectedProduct = product;
+
+    document.getElementById('modalProductName').textContent = product.nombre;
+    const imgUrl = (product.imagen && product.imagen.trim() !== '') ? optimizeGoogleDriveUrl(product.imagen) : DEFAULT_IMAGE;
+    document.getElementById('modalProductImage').src = imgUrl;
+
+    const container = document.getElementById('modalPresentations');
+
+    // Default Option (Unidad/Base)
+    let html = `
+        <div class="presentation-option" onclick="selectPresentation('${codigo}', 'UNIDAD', ${product.precioVenta}, 1)">
+            <div class="pres-info">
+                <h4>UNIDAD (Base)</h4>
+                <p>Precio regular</p>
+            </div>
+            <div class="pres-price">S/ ${product.precioVenta.toFixed(2)}</div>
+        </div>
+    `;
+
+    // Extra Presentations
+    if (product.presentaciones) {
+        html += product.presentaciones.map(pres => `
+            <div class="presentation-option" onclick="selectPresentation('${codigo}', '${pres.nombre}', ${pres.precio}, ${pres.factor})">
+                <div class="pres-info">
+                    <h4>${pres.nombre}</h4>
+                    <p>Factor: ${pres.factor}</p>
+                </div>
+                <div class="pres-price">S/ ${pres.precio.toFixed(2)}</div>
+            </div>
+        `).join('');
+    }
+
+    container.innerHTML = html;
+    document.getElementById('productOptionsModal').classList.add('active');
+}
+
+function closeProductOptions() {
+    document.getElementById('productOptionsModal').classList.remove('active');
+    selectedProduct = null;
+}
+
+function selectPresentation(codigo, presName, price, factor) {
+    // Logic to add to cart directly or ask quantity?
+    // User requirement: "pueda añadirle la cantidad" (editable).
+    // Let's ask quantity via a simple prompt or overlay in this modal.
+    // For MVP/Speed: simple prompt. Better: replace list with qty input for selected option.
+
+    // Let's modify logic to just add 1 unit (factor equivalent) or ask.
+    // Assuming adding "1 presentation unit" = "factor * 1" base units?
+    // Or do we treat it as a sales line item?
+    // The backend `addSolicitud` takes `cantidad`. If we sell "1 Box of 12", do we deduct 12 from stock?
+    // ERP usually tracks base units. So Quantity = 1 * Factor.
+
+    const qty = prompt(`¿Cuántas ${presName} deseas agregar?`, "1");
+    if (!qty) return;
+
+    const qtyNum = parseFloat(qty);
+    if (isNaN(qtyNum) || qtyNum <= 0) return alert('Cantidad inválida');
+
+    const totalUnits = qtyNum * factor;
+
+    // Add to backend
+    confirmQuantity(codigo, totalUnits, presName); // Modified confirmQuantity to accept args
+    closeProductOptions();
+}
+
+
 // ===== BÚSQUEDA =====
 function setupSearch() {
     const searchInput = document.getElementById('searchInput');
@@ -458,13 +627,23 @@ function validateQuantity(codigo) {
     input.value = value.toFixed(1);
 }
 
-async function confirmQuantity(codigo) {
+async function confirmQuantity(codigo, manualQty = null, presentation = null) {
     // 1. PREPARACIÓN DE DATOS
-    const input = document.getElementById(`qty-${codigo}`);
-    const newValue = parseFloat(input.value);
-    // Guardamos el valor antiguo por si hay que deshacer (Rollback)
-    const oldValue = userSolicitudes[codigo] || 0;
-    const diff = newValue - oldValue;
+    let diff = 0;
+    let newValue = 0;
+    let oldValue = userSolicitudes[codigo] || 0;
+
+    if (manualQty !== null) {
+        // Mode: Adding specific amount (from Presentation Modal)
+        // We add to existing.
+        newValue = oldValue + manualQty;
+        diff = manualQty;
+    } else {
+        // Mode: Explicit Set (from Inline Controls)
+        const input = document.getElementById(`qty-${codigo}`);
+        newValue = parseFloat(input.value);
+        diff = newValue - oldValue;
+    }
 
     if (diff === 0) {
         showToast('ℹ️ No hay cambios para registrar');
@@ -491,18 +670,24 @@ async function confirmQuantity(codigo) {
     updateProductCard(codigo);
 
     // Feedback instantáneo
-    showToast(diff > 0 ? `✓ +${diff.toFixed(1)} agregado` : `✓ ${diff.toFixed(1)} restado`);
-    document.getElementById('searchInput').focus();
+    showToast(diff > 0 ? `✓ +${diff.toFixed(1)} agregado` : `✓ ${Math.abs(diff).toFixed(1)} restado`);
+    if (!manualQty) document.getElementById('searchInput').focus();
 
     // 3. ENVÍO AL SERVIDOR EN SEGUNDO PLANO
     try {
-        const response = await fetch(`${APPS_SCRIPT_URL}?action=addSolicitud`, {
+        // Use 'addSale' for explicit Sales/POS logic if we want distinction?
+        // Reuse 'addSolicitud' but pass seller?
+        const action = 'addSale'; // Using new endpoint
+
+        const response = await fetch(`${APPS_SCRIPT_URL}?action=${action}`, {
             method: 'POST',
             keepalive: true, // Intenta guardar aunque cierres la pestaña
             body: JSON.stringify({
                 codigo: codigo,
                 cantidad: diff,
-                usuario: currentViewUser // IMPORTANTE: Enviamos la zona que se está viendo
+                usuario: currentViewUser, // Zone
+                vendedor: currentSeller,   // Seller Name
+                presentacion: presentation // Metadata (optional if we added column)
             })
         });
 
@@ -530,6 +715,7 @@ async function confirmQuantity(codigo) {
     }
 }
 function updateProductCard(codigo) {
+    // Only update if rendered
     const card = document.querySelector(`[data-codigo="${codigo}"]`);
     if (!card) return;
 
@@ -540,18 +726,18 @@ function updateProductCard(codigo) {
     let requestedBadge = badgesContainer.querySelector('.badge-requested');
     if (solicitado !== 0) {
         if (requestedBadge) {
-            requestedBadge.textContent = `Solicitado: ${solicitado.toFixed(1)}`;
+            requestedBadge.textContent = `En carro: ${solicitado.toFixed(1)}`;
         } else {
             const newBadge = document.createElement('span');
             newBadge.className = 'badge badge-requested';
-            newBadge.textContent = `Solicitado: ${solicitado.toFixed(1)}`;
+            newBadge.textContent = `En carro: ${solicitado.toFixed(1)}`;
             badgesContainer.appendChild(newBadge);
         }
     } else if (requestedBadge) {
         requestedBadge.remove();
     }
 
-    // Actualizar el input
+    // Actualizar el input (si existe, puede no existir si es modo presentación)
     const input = document.getElementById(`qty-${codigo}`);
     if (input) {
         input.value = solicitado.toFixed(1);
@@ -840,6 +1026,7 @@ function logout() {
     localStorage.removeItem('session');
     currentUser = null;
     currentViewUser = null;
+    currentSeller = null;
     userRole = 'tienda';
     availableZones = [];
     if (sessionTimeout) clearTimeout(sessionTimeout);
