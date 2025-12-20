@@ -739,6 +739,18 @@ body {
     }
 }
 
+/* Flying Image Animation */
+.flying-img {
+    position: fixed;
+    z-index: 9999;
+    background: transparent;
+    pointer-events: none;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.8s ease;
+    object-fit: cover;
+}
+
 .modal-header {
     display: flex;
     justify-content: space-between;
