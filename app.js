@@ -20,6 +20,7 @@ let qrScanner = null;
 let isRendering = false; // CRÍTICO: Prevenir renders múltiples
 let historyCache = {}; // Cache para historiales por código
 let isSortByToday = false; // Estado del botón de ordenamiento
+let availableSellers = []; // Cache de vendedores
 
 // --- OPTIMIZACIÓN: Pre-carga de productos ---
 // Iniciamos la carga de productos apenas carga el script (en paralelo al login)
@@ -33,6 +34,7 @@ let productsPromise = fetch(`${APPS_SCRIPT_URL}?action=getProducts`)
 // ===== INICIALIZACIÓN =====
 window.addEventListener('load', () => {
     checkSession();
+    loadSellers(); // Background fetch
 });
 
 function checkSession() {
@@ -134,7 +136,34 @@ async function showMainApp() {
     await loadTutorial();
 
     // Auto-Refresh Every 60s (To catch deletions/updates)
-    setInterval(() => loadProducts(true), 60000); // true = silent release
+    setInterval(() => {
+        loadProducts(true);
+        loadSellers(true);
+    }, 60000);
+
+    // Initial load
+    loadSellers();
+}
+
+// ===== CARGAR VENDEDORES (BACKGROUND) =====
+async function loadSellers(silent = false) {
+    if (!currentViewUser) return;
+    try {
+        const res = await fetch(`${APPS_SCRIPT_URL}?action=getActiveSellers&zone=${currentViewUser}`);
+        const data = await res.json();
+        availableSellers = data;
+
+        // Update Modal if Open
+        const modal = document.getElementById('sellerModal');
+        if (modal.classList.contains('active')) {
+            renderSellerList(availableSellers);
+            // Disable input if loading finished? No, enable logic handles that.
+            // Check validation of current input against new list
+            validateNewSellerInput();
+        }
+    } catch (e) {
+        if (!silent) console.error("Error fetching sellers:", e);
+    }
 }
 
 // ===== MODULO SWITCHING =====
@@ -166,32 +195,82 @@ async function switchModule(moduleName) {
 }
 
 // ===== POS: SELLER LOGIC =====
+// ===== POS: SELLER LOGIC =====
 async function handleSellerCheck() {
     const modal = document.getElementById('sellerModal');
     const container = document.getElementById('sellerList');
+    const input = document.getElementById('newSellerName');
 
     modal.classList.add('active');
-    container.innerHTML = '<div class="loading">Cargando vendedores...</div>';
 
-    try {
-        const res = await fetch(`${APPS_SCRIPT_URL}?action=getActiveSellers&zone=${currentViewUser}`);
-        const sellers = await res.json();
+    // Setup Input Listeners for Validation
+    input.oninput = validateNewSellerInput;
+    input.onkeyup = (e) => {
+        if (e.key === 'Enter' && !document.querySelector('#btnIngresarSeller').disabled) startNewSellerSession();
+    };
 
-        if (sellers.length === 0) {
-            container.innerHTML = '<p style="width:100%;color:#999;">No hay vendedores activos. Ingresa tu nombre abajo.</p>';
-        } else {
-            container.innerHTML = sellers.map(name => `
-                <div class="seller-btn" onclick="selectSeller('${name}')">
-                    <span class="icon">👤</span>
-                    <span>${name}</span>
-                </div>
-            `).join('');
-        }
-    } catch (e) {
-        console.error("Error fetching sellers:", e);
-        container.innerHTML = '<p class="error">Error de conexión</p>';
+    // Use Cache or Fetch
+    if (availableSellers.length > 0) {
+        renderSellerList(availableSellers);
+    } else {
+        container.innerHTML = '<div class="loading">Cargando vendedores...</div>';
+        await loadSellers(); // This updates availableSellers and renders if modal open
     }
 }
+
+function renderSellerList(sellers) {
+    const container = document.getElementById('sellerList');
+    if (sellers.length === 0) {
+        container.innerHTML = '<p class="no-results">No hay vendedores activos. Ingresa uno nuevo.</p>';
+        return;
+    }
+
+    container.innerHTML = sellers.map(s => `
+        <button class="btn-seller" onclick="selectSeller('${s}')" style="min-width:100px;">
+            👤 ${s}
+        </button>
+    `).join('');
+}
+
+function validateNewSellerInput() {
+    const input = document.getElementById('newSellerName');
+    const btn = document.querySelector('#sellerModal .btn-primary'); // Assuming this is the Ingresar button
+    if (!btn) return;
+
+    // Force Uppercase
+    input.value = input.value.toUpperCase();
+    const name = input.value.trim();
+
+    // Check duplicates
+    if (availableSellers.includes(name)) {
+        btn.disabled = true;
+        btn.innerText = "Ya existe";
+        btn.style.backgroundColor = "#e74c3c";
+        return;
+    }
+
+    // Check empty
+    if (!name) {
+        btn.disabled = true;
+        btn.innerText = "Ingresar";
+        btn.style.backgroundColor = ""; // Reset
+        return;
+    }
+
+    // Valid
+    btn.disabled = false;
+    btn.innerText = "Ingresar";
+    btn.style.backgroundColor = "#27ae60";
+}
+
+function closeSellerModal() {
+    document.getElementById('sellerModal').classList.remove('active');
+    // If we were trying to enter POS but cancelled, go back to Pedidos
+    if (currentModule === 'pos' && !currentSeller) {
+        switchModule('pedidos');
+    }
+}
+
 
 function selectSeller(name) {
     currentSeller = name;
@@ -204,16 +283,45 @@ function selectSeller(name) {
 async function startNewSellerSession() {
     const input = document.getElementById('newSellerName');
     const name = input.value.trim();
-    if (!name) return alert('Por favor ingresa un nombre');
+    if (!name) return;
 
-    // Optimist
-    selectSeller(name);
+    // Trigger Animation
+    triggerConfetti();
 
-    // Register in backend
+    // Register in backend (fire and forget)
     fetch(`${APPS_SCRIPT_URL}?action=registerSeller`, {
         method: 'POST',
         body: JSON.stringify({ zone: currentViewUser, name: name })
     });
+
+    // Wait for animation then enter
+    setTimeout(() => {
+        selectSeller(name);
+    }, 1000); // 1 second delay
+}
+
+function triggerConfetti() {
+    const colors = ['#f00', '#0f0', '#00f', '#ff0', '#0ff', '#f0f'];
+    for (let i = 0; i < 50; i++) {
+        const conf = document.createElement('div');
+        conf.className = 'confetti';
+        conf.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+
+        // Random direction
+        const angle = Math.random() * Math.PI * 2;
+        const velocity = 100 + Math.random() * 200;
+        const tx = Math.cos(angle) * velocity + 'px';
+        const ty = Math.sin(angle) * velocity + 'px';
+
+        conf.style.setProperty('--tx', tx);
+        conf.style.setProperty('--ty', ty);
+
+        conf.style.animation = 'explode 1s ease-out forwards';
+        document.body.appendChild(conf);
+
+        // Cleanup
+        setTimeout(() => conf.remove(), 1000);
+    }
 }
 
 function updateSessionSeller(name) {
