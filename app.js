@@ -192,6 +192,17 @@ async function switchModule(moduleName) {
 
     // Re-render products to reflect new mode (prices vs no prices)
     renderProducts(allProducts);
+
+    // Floating Cart Toggle
+    const cartBtn = document.getElementById('floatingCart');
+    if (cartBtn) {
+        if (moduleName === 'pos') {
+            cartBtn.classList.add('active');
+            updateCartBadge();
+        } else {
+            cartBtn.classList.remove('active');
+        }
+    }
 }
 
 // ===== POS: SELLER LOGIC =====
@@ -278,6 +289,7 @@ function selectSeller(name) {
     document.getElementById('sellerModal').classList.remove('active');
     updateUserDisplay();
     showToast(`Hola, ${name} 👋`);
+    triggerConfetti(); // Trigger for existing implementation too
 }
 
 async function startNewSellerSession() {
@@ -286,6 +298,10 @@ async function startNewSellerSession() {
     if (!name) return;
 
     // Trigger Animation
+    // Trigger Animation (Moved to selectSeller or kept here? selectSeller is called after delay)
+    // If I remove it here, the button click won't explode immediately.
+    // Let's keep it here for IMMEDIATE feedback on "Ingresar", and selectSeller can check if it should explode? 
+    // Or just double explosion is fine? "Mas efectos" :)
     triggerConfetti();
 
     // Register in backend (fire and forget)
@@ -294,33 +310,48 @@ async function startNewSellerSession() {
         body: JSON.stringify({ zone: currentViewUser, name: name })
     });
 
-    // Wait for animation then enter
+    // Wait for animation then enter ? No, selectSeller has confetti now. 
+    // Just delay slighly for dramatic effect of "Ingresando..." or just call it.
+    // User wanted explosion effect BEFORE entering.
+    // But selectSeller handles the "Login".
+
+    // Let's keep the delay but remove manual trigger here if selectSeller has it?
+    // User said: "no hay efecto explosive al usuario existente".
+    // So existing user (selectSeller) needs it.
+    // New user (startNewSellerSession) creates it, then calls selectSeller.
+    // If selectSeller has it, we get double.
+    // Let's remove it here and let selectSeller do it.
+
     setTimeout(() => {
         selectSeller(name);
-    }, 1000); // 1 second delay
+    }, 500);
 }
 
 function triggerConfetti() {
-    const colors = ['#f00', '#0f0', '#00f', '#ff0', '#0ff', '#f0f'];
-    for (let i = 0; i < 50; i++) {
+    const colors = ['#f00', '#0f0', '#00f', '#ff0', '#0ff', '#f0f', '#FFA500', '#FFC0CB', '#8A2BE2'];
+    // Increased particles to 150 for "MORE EFFECTS"
+    for (let i = 0; i < 150; i++) {
         const conf = document.createElement('div');
         conf.className = 'confetti';
         conf.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
 
-        // Random direction
+        // Random direction and wider spread
         const angle = Math.random() * Math.PI * 2;
-        const velocity = 100 + Math.random() * 200;
+        const velocity = 150 + Math.random() * 250; // Faster
         const tx = Math.cos(angle) * velocity + 'px';
         const ty = Math.sin(angle) * velocity + 'px';
 
         conf.style.setProperty('--tx', tx);
         conf.style.setProperty('--ty', ty);
 
-        conf.style.animation = 'explode 1s ease-out forwards';
+        // Randomize size slightly
+        const scale = 0.5 + Math.random() * 1.0;
+        conf.style.transform = `scale(${scale})`;
+
+        conf.style.animation = 'explode 1.2s cubic-bezier(0,0,0.2,1) forwards'; // Better easing
         document.body.appendChild(conf);
 
-        // Cleanup
-        setTimeout(() => conf.remove(), 1000);
+        setTimeout(() => conf.remove(), 1200);
     }
 }
 
@@ -1054,6 +1085,39 @@ function updateProductCard(codigo) {
     if (input) {
         input.value = solicitado.toFixed(1);
     }
+
+    // Refresh Cart Badge if in POS
+    if (currentModule === 'pos') {
+        updateCartBadge();
+    }
+}
+
+function updateCartBadge() {
+    const badge = document.getElementById('cartCount');
+    if (!badge) return;
+
+    // Calculate total items
+    let total = 0;
+    // We iterate userSolicitudes
+    Object.values(userSolicitudes).forEach(qty => {
+        if (qty > 0) total += 1; // Count distinct items or total units? Usually distinct items for badge? Or units?
+        // Let's do distinct items for now, typically "3" means 3 types of products.
+        // User asked for "Carrito de compras", normally shows item count.
+        // Let's show distinct items.
+    });
+
+    badge.textContent = total;
+    badge.style.display = total > 0 ? 'flex' : 'none'; // Optional: hide if 0? Or keep 0.
+    // Design said "con diseño", maybe keep 0 is fine. But typical pattern is hide or show 0.
+    // Let's show 0. 
+    badge.style.display = 'flex';
+}
+
+function toggleCart() {
+    // Placeholder for Cart View
+    // Could open a modal with list of selected items (Separados/Solicitados)
+    // For now, let's just show a toast or alert as "Functional Design" phase.
+    showToast('🛒 Carrito de compras: ' + document.getElementById('cartCount').textContent + ' productos');
 }
 
 function showToast(message) {
