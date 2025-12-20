@@ -512,9 +512,6 @@ function renderProducts(products) {
                     <button class="btn-plus" onclick="incrementQuantity('${p.codigo}')">+</button>
                     <button class="btn-confirm" onclick="confirmQuantity('${p.codigo}')" title="Solicitar">Solicitar</button>
                 </div>
-                <div class="product-actions">
-                    <button class="btn-action btn-history" onclick="showHistory('${p.codigo}')">📋 Historial</button>
-                </div>
              `;
         }
 
@@ -1033,36 +1030,45 @@ async function showHistory(codigo) {
     }
 }
 
-function printHistory(codigo) {
-    if (!historyCache[codigo]) {
-        // Fallback catch-up fetch
-        const product = allProducts.find(p => p.codigo === codigo);
-        console.warn('History not found in cache for ' + codigo + ', attempting to fetch...');
-        showToast('⏳ Cargando historial...');
-        fetch(`${APPS_SCRIPT_URL}?action=getHistory&codigo=${codigo}&usuario=${currentViewUser}`)
-            .then(r => r.json())
-            .then(data => {
-                historyCache[codigo] = data;
-                printHistory(codigo);
-            })
-            .catch(e => alert("Error cargando"));
+async function printHistory(codigo) {
+    let history = historyCache[codigo];
+
+    // 1. Si no hay cache, descargar
+    if (!history) {
+        showToast('⏳ Cargando historial para imprimir...');
+        try {
+            const response = await fetch(`${APPS_SCRIPT_URL}?action=getHistory&codigo=${codigo}&usuario=${currentViewUser}`);
+            history = await response.json();
+            historyCache[codigo] = history;
+        } catch (e) {
+            console.error("Error fetching history:", e);
+            alert("Error al cargar historial. Intente nuevamente.");
+            return;
+        }
+    }
+
+    // 2. Validar si hay registros
+    if (!history || history.length === 0) {
+        alert("No hay registros de historial para este producto hoy (o nunca).");
         return;
     }
 
-    const history = historyCache[codigo];
     const product = allProducts.find(p => p.codigo === codigo);
     const productName = product ? product.nombre : codigo;
     const now = new Date();
 
     const printWindow = window.open('', '', 'height=600,width=400');
+    if (!printWindow) {
+        alert("El navegador bloqueó la ventana emergente. Por favor permite pop-ups.");
+        return;
+    }
 
     let rows = history.map(h => {
-        let dateObj = h.fecha.includes('T') ? new Date(h.fecha) : new Date(); // Simplified parsing
+        let dateObj = h.fecha.includes('T') ? new Date(h.fecha) : new Date();
         let displayDate = dateObj.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' }) + ' ' +
             dateObj.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
 
         let label = h.categoria ? h.categoria.substring(0, 3).toUpperCase() : 'SOL';
-        let rowStyle = '';
         if (h.categoria === 'separado') label = 'SEP';
         if (h.categoria === 'despachado') label = 'DES';
 
