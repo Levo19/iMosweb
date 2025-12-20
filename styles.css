@@ -1472,3 +1472,28 @@ body {
 .product-actions {
     margin-top: auto;
 }
+
+/* CONFETTI ANIMATION */
+.confetti {
+    position: fixed;
+    width: 10px;
+    height: 10px;
+    background-color: #f00;
+    pointer-events: none;
+    z-index: 9999;
+    top: 50%;
+    left: 50%;
+    border-radius: 50%;
+}
+
+@keyframes explode {
+    0% {
+        transform: translate(0, 0) scale(1);
+        opacity: 1;
+    }
+
+    100% {
+        transform: translate(var(--tx), var(--ty)) scale(0);
+        opacity: 0;
+    }
+}
