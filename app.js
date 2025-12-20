@@ -841,8 +841,16 @@ async function confirmQuantity(codigo, manualQty = null, presentation = null) {
     }
 
     // 2. ACTUALIZACIÓN VISUAL INMEDIATA (OPTIMISTA)
-    // Asumimos éxito y actualizamos todo ya para que se sienta rápido
+    // 2. ACTUALIZACIÓN OPTIMISTA EN MEMORIA
     userSolicitudes[codigo] = newValue;
+
+    // --- CRITICAL FIX: Sync userStats for Flip Card Back ---
+    if (!userStats[codigo]) {
+        userStats[codigo] = { solicitado: 0, separado: 0, despachado: 0 };
+    }
+    userStats[codigo].solicitado = newValue;
+    // ----------------------------------------------------
+
     updateProductCard(codigo);
 
     // Feedback instantáneo
@@ -904,9 +912,9 @@ function updateProductCard(codigo) {
     if (!card) return;
 
     const solicitado = userSolicitudes[codigo] || 0;
-    const badgesContainer = card.querySelector('.product-badges');
 
-    // Actualizar o crear badge de solicitado
+    // Update Front Badge
+    const badgesContainer = card.querySelector('.product-badges');
     let requestedBadge = badgesContainer.querySelector('.badge-requested');
     if (solicitado !== 0) {
         if (requestedBadge) {
@@ -919,6 +927,12 @@ function updateProductCard(codigo) {
         }
     } else if (requestedBadge) {
         requestedBadge.remove();
+    }
+
+    // Update Flip Card Back Stats (Real-time)
+    const statValueSol = card.querySelector('.flip-card-back .stat-item:nth-child(1) .stat-value');
+    if (statValueSol) {
+        statValueSol.textContent = solicitado.toFixed(1);
     }
 
     // Actualizar el input (si existe, puede no existir si es modo presentación)
