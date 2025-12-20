@@ -722,11 +722,11 @@ function sortProducts(type) {
     switch (type) {
         case 'az':
             sorted.sort((a, b) => a.nombre.localeCompare(b.nombre));
-            document.getElementById('sortIcon').textContent = '🔤';
+            // document.getElementById('sortIcon').textContent = '🔤';
             break;
         case 'za':
             sorted.sort((a, b) => b.nombre.localeCompare(a.nombre));
-            document.getElementById('sortIcon').textContent = '🔤';
+            // document.getElementById('sortIcon').textContent = '🔤';
             break;
         case 'requested':
             sorted.sort((a, b) => {
@@ -734,11 +734,11 @@ function sortProducts(type) {
                 const bReq = userSolicitudes[b.codigo] || 0;
                 return bReq - aReq;
             });
-            document.getElementById('sortIcon').textContent = '📊';
+            // document.getElementById('sortIcon').textContent = '📊';
             break;
         case 'stock':
             sorted.sort((a, b) => b.stock - a.stock);
-            document.getElementById('sortIcon').textContent = '📦';
+            // document.getElementById('sortIcon').textContent = '📦';
             break;
     }
 
