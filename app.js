@@ -19,6 +19,7 @@ let currentSort = 'default';
 let qrScanner = null;
 let isRendering = false; // CRÍTICO: Prevenir renders múltiples
 let historyCache = {}; // Cache para historiales por código
+let isSortByToday = false; // Estado del botón de ordenamiento
 
 // --- OPTIMIZACIÓN: Pre-carga de productos ---
 // Iniciamos la carga de productos apenas carga el script (en paralelo al login)
@@ -710,40 +711,36 @@ function filterProducts(query) {
 }
 
 // ===== ORDENAMIENTO =====
-function toggleSortMenu() {
-    const menu = document.getElementById('sortMenu');
-    menu.classList.toggle('active');
-}
+// ===== ORDENAMIENTO =====
+function toggleSortMode() {
+    isSortByToday = !isSortByToday;
+    const btn = document.getElementById('btnSortToggle');
 
-function sortProducts(type) {
-    currentSort = type;
-    let sorted = [...allProducts];
+    // UI Update
+    if (isSortByToday) {
+        btn.classList.add('active');
+        // Ordenar: Tienen actividad hoy (Solicitado/Separado/Despachado > 0) PRIMERO
+        allProducts.sort((a, b) => {
+            const statsA = userStats[a.codigo] || { solicitado: 0, separado: 0, despachado: 0 };
+            const statsB = userStats[b.codigo] || { solicitado: 0, separado: 0, despachado: 0 };
 
-    switch (type) {
-        case 'az':
-            sorted.sort((a, b) => a.nombre.localeCompare(b.nombre));
-            // document.getElementById('sortIcon').textContent = '🔤';
-            break;
-        case 'za':
-            sorted.sort((a, b) => b.nombre.localeCompare(a.nombre));
-            // document.getElementById('sortIcon').textContent = '🔤';
-            break;
-        case 'requested':
-            sorted.sort((a, b) => {
-                const aReq = userSolicitudes[a.codigo] || 0;
-                const bReq = userSolicitudes[b.codigo] || 0;
-                return bReq - aReq;
-            });
-            // document.getElementById('sortIcon').textContent = '📊';
-            break;
-        case 'stock':
-            sorted.sort((a, b) => b.stock - a.stock);
-            // document.getElementById('sortIcon').textContent = '📦';
-            break;
+            const activeA = (statsA.solicitado > 0 || statsA.separado > 0 || statsA.despachado > 0) ? 1 : 0;
+            const activeB = (statsB.solicitado > 0 || statsB.separado > 0 || statsB.despachado > 0) ? 1 : 0;
+
+            if (activeA !== activeB) return activeB - activeA; // Primero los activos
+            return a.nombre.localeCompare(b.nombre); // Luego alfabético
+        });
+        showToast('📅 Ordenado por: Actividad de Hoy');
+    } else {
+        btn.classList.remove('active');
+        // Ordenar: Alfabético A-Z normal
+        allProducts.sort((a, b) => a.nombre.localeCompare(b.nombre));
+        showToast('📝 Ordenado por: Nombre A-Z');
     }
 
-    renderProducts(sorted);
-    document.getElementById('sortMenu').classList.remove('active');
+    // Refrescar vista (manteniendo filtro de búsqueda si existe)
+    const currentQuery = document.getElementById('searchInput').value;
+    filterProducts(currentQuery);
 }
 
 // ===== SCANNER QR =====
