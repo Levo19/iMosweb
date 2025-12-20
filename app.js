@@ -441,7 +441,7 @@ function renderProducts(products) {
                                </div>`;
             }
         } else {
-            // PEDIDOS MODE: Standard Request + History (Classic View)
+            // PEDIDOS MODE: Standard Request
             actionHtml = `
                 <div class="quantity-control">
                     <button class="btn-minus" onclick="decrementQuantity('${p.codigo}')">−</button>
@@ -458,12 +458,6 @@ function renderProducts(products) {
                     
                     <button class="btn-confirm" onclick="confirmQuantity('${p.codigo}')" title="Solicitar">
                         Solicitar
-                    </button>
-                </div>
-
-                <div class="product-actions">
-                    <button class="btn-action btn-history" onclick="showHistory('${p.codigo}')">
-                        📋 Historial
                     </button>
                 </div>
              `;
@@ -557,7 +551,15 @@ function renderProducts(products) {
                             <div class="stat-item"><span class="stat-label">Separado</span><span class="stat-value">${stats.separado.toFixed(1)}</span></div>
                             <div class="stat-item"><span class="stat-label">Despachado</span><span class="stat-value">${stats.despachado.toFixed(1)}</span></div>
                         </div>
-                        <p style="margin-top:20px; font-size:0.8em; opacity:0.8;">Click para volver</p>
+
+                        <!-- BOTÓN IMPRIMIR TICKET (80mm) -->
+                        <button class="btn-primary" 
+                                style="margin-top:20px; background:#333; font-size:12px; z-index: 10;" 
+                                onclick="event.stopPropagation(); printHistory('${p.codigo}')">
+                            🖨️ Imprimir Ticket
+                        </button>
+
+                        <p style="margin-top:15px; font-size:0.8em; opacity:0.8;">Click para volver</p>
                     </div>
                 </div>
             </div>
@@ -1032,51 +1034,84 @@ async function showHistory(codigo) {
 }
 
 function printHistory(codigo) {
-    if (!historyCache[codigo]) return;
+    if (!historyCache[codigo]) {
+        // Fallback catch-up fetch
+        const product = allProducts.find(p => p.codigo === codigo);
+        console.warn('History not found in cache for ' + codigo + ', attempting to fetch...');
+        showToast('⏳ Cargando historial...');
+        fetch(`${APPS_SCRIPT_URL}?action=getHistory&codigo=${codigo}&usuario=${currentViewUser}`)
+            .then(r => r.json())
+            .then(data => {
+                historyCache[codigo] = data;
+                printHistory(codigo);
+            })
+            .catch(e => alert("Error cargando"));
+        return;
+    }
 
     const history = historyCache[codigo];
     const product = allProducts.find(p => p.codigo === codigo);
     const productName = product ? product.nombre : codigo;
+    const now = new Date();
 
-    // Crear ventana de impresión
-    const printWindow = window.open('', '', 'height=600,width=800');
+    const printWindow = window.open('', '', 'height=600,width=400');
 
     let rows = history.map(h => {
-        let dateStr = h.fecha.includes('T') ? new Date(h.fecha).toLocaleString('es-PE') : h.fecha;
+        let dateObj = h.fecha.includes('T') ? new Date(h.fecha) : new Date(); // Simplified parsing
+        let displayDate = dateObj.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' }) + ' ' +
+            dateObj.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+
+        let label = h.categoria ? h.categoria.substring(0, 3).toUpperCase() : 'SOL';
+        let rowStyle = '';
+        if (h.categoria === 'separado') label = 'SEP';
+        if (h.categoria === 'despachado') label = 'DES';
+
         return `
         <tr>
-                <td>${dateStr}</td>
-                <td style="text-align:center;font-weight:bold;">${h.cantidad}</td>
-                <td>${h.categoria || 'solicitado'}</td>
-            </tr>
+            <td>${displayDate}</td>
+            <td style="text-align:center; font-weight:900; font-size:14px;">${h.cantidad}</td>
+            <td style="text-align:right;">${label}</td>
+        </tr>
         `;
     }).join('');
 
     printWindow.document.write(`
         <html>
             <head>
-                <title>Historial - ${productName}</title>
+                <title>Ticket - ${codigo}</title>
                 <style>
-                    body { font-family: sans-serif; padding: 20px; }
-                    h1 { font-size: 18px; margin-bottom: 5px; }
-                    h2 { font-size: 14px; color: #666; margin-bottom: 20px; }
+                    @page { size: 80mm auto; margin: 0; }
+                    body { 
+                        width: 76mm; /* Margen seguridad 80mm - 4mm */
+                        font-family: 'Arial', sans-serif; 
+                        font-weight: 700; 
+                        font-size: 13px;
+                        color: #000;
+                        margin: 0 auto;
+                        padding: 2mm;
+                    }
+                    h1 { font-size: 15px; text-align: center; margin: 5px 0; text-transform: uppercase; }
+                    .meta { font-size: 11px; margin-bottom: 10px; border-bottom: 2px dashed #000; padding-bottom: 5px; }
                     table { width: 100%; border-collapse: collapse; }
-                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                    th { background-color: #f2f2f2; }
-                    .footer { margin-top: 30px; font-size: 12px; color: #999; text-align: center; }
+                    th { border-bottom: 2px solid #000; text-align: left; font-size: 11px; }
+                    td { border-bottom: 1px dashed #666; padding: 4px 0; font-family: 'Courier New', monospace; }
+                    .footer { margin-top: 15px; text-align: center; font-size: 10px; border-top: 2px dashed #000; padding-top: 5px;}
                 </style>
             </head>
             <body>
-                <h1>Historial de Movimientos</h1>
-                <h2>Producto: ${productName} (${codigo})</h2>
-                <h2>Zona: ${currentViewUser}</h2>
+                <h1>Historial ${currentViewUser}</h1>
+                <div class="meta">
+                    <strong>${productName}</strong><br>
+                    COD: ${codigo}<br>
+                    IMPRESO: ${now.toLocaleString('es-PE')}
+                </div>
                 
                 <table>
                     <thead>
                         <tr>
-                            <th>Fecha</th>
-                            <th>Cantidad</th>
-                            <th>Estado</th>
+                            <th>FECHA</th>
+                            <th style="text-align:center">CANT</th>
+                            <th style="text-align:right">EST</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1084,13 +1119,15 @@ function printHistory(codigo) {
                     </tbody>
                 </table>
                 
-                <div class="footer">Generado el ${new Date().toLocaleString('es-PE')}</div>
+                <div class="footer">
+                    *** FIN DEL TICKET ***
+                </div>
                 <script>
-                    window.onload = function() { window.print(); window.close(); }
+                    window.onload = function() { window.print(); setTimeout(() => window.close(), 500); }
                 </script>
             </body>
         </html>
-        `);
+    `);
     printWindow.document.close();
 }
 
