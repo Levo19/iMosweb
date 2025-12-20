@@ -518,9 +518,9 @@ function renderProducts(products) {
 
         const rawStats = userStats[p.codigo] || {};
         const stats = {
-            solicitado: rawStats.solicitado || 0,
-            separado: rawStats.separado || 0,
-            despachado: rawStats.despachado || 0
+            solicitado: parseFloat(rawStats.solicitado || 0),
+            separado: parseFloat(rawStats.separado || 0),
+            despachado: parseFloat(rawStats.despachado || 0)
         };
 
         return `
@@ -929,10 +929,16 @@ function updateProductCard(codigo) {
         requestedBadge.remove();
     }
 
-    // Update Flip Card Back Stats (Real-time)
-    const statValueSol = card.querySelector('.flip-card-back .stat-item:nth-child(1) .stat-value');
-    if (statValueSol) {
-        statValueSol.textContent = solicitado.toFixed(1);
+    // Update Flip Card Back Stats (Real-time) - More robust selector
+    const backFace = card.querySelector('.flip-card-back');
+    if (backFace) {
+        // Find the stat item for 'Solicitado' specifically by label text if possible, or just assume first position
+        // Assuming order: Solicitado, Separado, Despachado
+        const statItems = backFace.querySelectorAll('.stat-item');
+        if (statItems.length > 0) {
+            const valSpan = statItems[0].querySelector('.stat-value');
+            if (valSpan) valSpan.textContent = solicitado.toFixed(1);
+        }
     }
 
     // Actualizar el input (si existe, puede no existir si es modo presentación)
