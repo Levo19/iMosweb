@@ -142,7 +142,7 @@ async function switchModule(moduleName) {
     document.getElementById(`menu-${moduleName}`).classList.add('active');
 
     // Update Header Title
-    const title = moduleName === 'pos' ? '🏪 Punto de Venta' : '📦 Módulo de Pedidos';
+    const title = moduleName === 'pos' ? '🏪 Punto de Venta' : '📦 Pedidos a Almacen';
     document.querySelector('.header-title').textContent = title;
 
     // Module Specific Logic
@@ -371,7 +371,28 @@ function renderProducts(products) {
         return;
     }
 
-    const html = products.map(p => {
+    // FILTER LOGIC FOR 'PEDIDOS' MODULE
+    /*
+      Requisito: 
+      - Stock > 0
+      - Nombre no puede ser 'zz' o 'ZZ'
+    */
+    let displayProducts = products;
+    if (currentModule === 'pedidos') { // apply only to Pedidos? User said "el modulo de pedido... muestran solo..."
+        displayProducts = products.filter(p => {
+            const nameBad = p.nombre.trim().toUpperCase() === 'ZZ';
+            const hasStock = p.stock > 0;
+            return !nameBad && hasStock;
+        });
+    }
+
+    if (displayProducts.length === 0) {
+        container.innerHTML = '<div class="no-results">No hay productos disponibles (Stock 0 o Ocultos)</div>';
+        isRendering = false;
+        return;
+    }
+
+    const html = displayProducts.map(p => {
         let serverQty = parseFloat(p.solicitado);
         if (isNaN(serverQty)) serverQty = 0;
         let localQty = userSolicitudes[p.codigo];
