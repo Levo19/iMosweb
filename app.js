@@ -5,6 +5,7 @@ const DEFAULT_IMAGE = 'https://raw.githubusercontent.com/Levo19/iMosweb/main/rec
 let currentUser = null;          // Usuario logueado (Jefe o Tienda)
 let currentViewUser = null;      // Usuario/Zona que se está visualizando
 let currentSeller = null;        // VENDEDOR ACTIVO (e.g., 'Luis')
+let currentModule = 'pedidos';   // 'pedidos' | 'pos'
 let userRole = 'tienda';         // 'tienda' o 'jefe'
 let availableZones = [];         // Lista de zonas disponibles para el jefe
 let sessionTimeout = null;
@@ -120,19 +121,44 @@ async function showMainApp() {
     // MOSTRAR SELECTOR DE ZONAS SI ES JEFE
     renderZoneSelector();
 
-    // POS: SELLER CHECK
-    // Si no tenemos vendedor definido (y es una zona de ventas común), preguntar
-    if (!currentSeller) {
-        await handleSellerCheck();
-    } else {
-        updateUserDisplay();
-    }
+    // Default to 'pedidos' initially
+    switchModule('pedidos');
+
+    // Remove Seller Check from initial load - it belongs to POS module switch
+    updateUserDisplay();
 
     await loadProducts();
     setupSearch();
     await loadTutorial();
-    // Sólo mostrar tutorial si ya pasamos el check de vendedor
-    if (currentSeller) setTimeout(() => showTutorial(), 1000);
+    // Tutorial logic can be module-specific later
+}
+
+// ===== MODULO SWITCHING =====
+async function switchModule(moduleName) {
+    currentModule = moduleName;
+
+    // Update Sidebar UI
+    document.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
+    document.getElementById(`menu-${moduleName}`).classList.add('active');
+
+    // Update Header Title
+    const title = moduleName === 'pos' ? '🏪 Punto de Venta' : '📦 Módulo de Pedidos';
+    document.querySelector('.header-title').textContent = title;
+
+    // Module Specific Logic
+    if (moduleName === 'pos') {
+        // POS: Requires Seller
+        if (!currentSeller) {
+            await handleSellerCheck();
+        }
+    } else {
+        // PEDIDOS: No seller needed, but we keep session if exists? 
+        // Or hide it? Let's hide seller display if in Pedidos to avoid confusion?
+        // User asked for "Separados". Let's keep seller in session but maybe UI focus changes.
+    }
+
+    // Re-render products to reflect new mode (prices vs no prices)
+    renderProducts(allProducts);
 }
 
 // ===== POS: SELLER LOGIC =====
@@ -675,20 +701,28 @@ async function confirmQuantity(codigo, manualQty = null, presentation = null) {
 
     // 3. ENVÍO AL SERVIDOR EN SEGUNDO PLANO
     try {
-        // Use 'addSale' for explicit Sales/POS logic if we want distinction?
-        // Reuse 'addSolicitud' but pass seller?
-        const action = 'addSale'; // Using new endpoint
+        // Module Logic: 
+        // POS -> addSale (with seller)
+        // Pedidos -> addSolicitud (standard)
+
+        let action = 'addSolicitud';
+        let payload = {
+            codigo: codigo,
+            cantidad: diff,
+            usuario: currentViewUser // Zone
+        };
+
+        if (currentModule === 'pos') {
+            action = 'addSale';
+            payload.vendedor = currentSeller;
+            payload.presentacion = presentation;
+            // Note: addSale expects 'usuario' too, which is set above
+        }
 
         const response = await fetch(`${APPS_SCRIPT_URL}?action=${action}`, {
             method: 'POST',
             keepalive: true, // Intenta guardar aunque cierres la pestaña
-            body: JSON.stringify({
-                codigo: codigo,
-                cantidad: diff,
-                usuario: currentViewUser, // Zone
-                vendedor: currentSeller,   // Seller Name
-                presentacion: presentation // Metadata (optional if we added column)
-            })
+            body: JSON.stringify(payload)
         });
 
         const result = await response.json();
