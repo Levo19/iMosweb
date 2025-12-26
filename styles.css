@@ -319,9 +319,19 @@ h3 {
     flex-shrink: 0;
     transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     /* Faster & Smoother */
+    /* Faster & Smoother */
     overflow: hidden;
     white-space: nowrap;
     /* Prevent text wrapping */
+    z-index: 50;
+    /* Ensure it stays above content/overlays on desktop */
+}
+
+@media (min-width: 1025px) {
+    .sidebar-overlay {
+        display: none !important;
+        pointer-events: none !important;
+    }
 }
 
 .sidebar:hover {
