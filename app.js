@@ -65,11 +65,19 @@ class App {
         // Close sidebar when clicking a link on mobile
         navLinks.forEach(link => {
             link.addEventListener('click', () => {
-                if (window.innerWidth <= 768) {
+                if (window.innerWidth <= 1024) { // Updated to match CSS breakpoint
                     if (sidebar) sidebar.classList.remove('active');
                     if (overlay) overlay.classList.remove('active');
                 }
             });
+        });
+
+        // SAFETY: Handle Resize
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 1024) {
+                if (sidebar) sidebar.classList.remove('active');
+                if (overlay) overlay.classList.remove('active');
+            }
         });
     }
 
