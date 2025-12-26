@@ -320,11 +320,14 @@ h3 {
     transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     /* Faster & Smoother */
     /* Faster & Smoother */
+    /* Faster & Smoother */
     overflow: hidden;
     white-space: nowrap;
     /* Prevent text wrapping */
-    z-index: 50;
-    /* Ensure it stays above content/overlays on desktop */
+    position: relative;
+    /* REQUIRED for z-index to work */
+    z-index: 3000;
+    /* Prioritize above standard content */
 }
 
 @media (min-width: 1025px) {
