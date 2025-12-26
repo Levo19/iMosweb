@@ -123,8 +123,16 @@ class App {
         // Navigation
         this.navLinks.forEach(link => {
             link.addEventListener('click', (e) => {
-                e.preventDefault();
                 const targetId = link.dataset.target;
+                console.log(`🖱️ CLICK DETECTED on Nav Link: ${targetId}`);
+                e.preventDefault();
+
+                // Force Overlay Hide (Defensive)
+                const overlay = document.getElementById('sidebar-overlay');
+                if (overlay) {
+                    overlay.style.display = 'none';
+                    overlay.classList.remove('active');
+                }
 
                 // Cleanup Dispatch Header (Restore Default)
                 this.restoreDefaultHeader();
