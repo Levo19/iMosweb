@@ -4,217 +4,327 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LEVO - Sistema de Pedidos</title>
-    <link rel="stylesheet" href="styles.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <title>LEVO ERP | Warehouse Management</title>
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@500;600;700&display=swap"
+        rel="stylesheet">
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <link rel="stylesheet" href="style.css?v=999">
 </head>
 
 <body>
-    <!-- Login -->
-    <div class="login-container" id="loginContainer">
-        <div class="login-left">
-            <div class="login-brand">
-                <div class="brand-logo">LEVO</div>
-                <p class="brand-tagline">Sistema Inteligente de Gestión</p>
-                <p style="opacity:0.8;max-width:400px;line-height:1.8;">
-                    Optimiza tus solicitudes de inventario con nuestra plataforma moderna y eficiente.
-                </p>
-            </div>
-        </div>
-        <div class="login-right">
-            <div class="login-box">
-                <h2>Iniciar Sesión</h2>
-                <form id="loginForm">
-                    <div class="form-group">
-                        <label>Usuario</label>
-                        <input type="text" id="username" required>
+
+    <!-- NOTIFICATION SYSTEM -->
+    <div id="notification-container"></div>
+
+    <!-- MODAL CONTAINER -->
+    <div id="modal-container" class="modal-overlay"></div>
+
+    <!-- LOGIN SCREEN -->
+    <section id="login-view" class="view active">
+        <div class="login-container">
+            <div class="login-card">
+                <div class="login-header">
+                    <div class="logo-circle">
+                        <i class="fa-solid fa-cube"></i>
                     </div>
-                    <div class="form-group">
-                        <label>Contraseña</label>
-                        <input type="password" id="password" required>
+                    <h1>LEVO ERP</h1>
+                    <p>Logística y Almacén</p>
+                </div>
+                <form id="login-form">
+                    <div class="input-group">
+                        <i class="fa-regular fa-user"></i>
+                        <input type="text" id="username" placeholder="Usuario" required autocomplete="username">
                     </div>
-                    <button type="submit" class="btn-login">Ingresar</button>
-                    <div id="loginMessage"></div>
+                    <div class="input-group">
+                        <i class="fa-solid fa-lock"></i>
+                        <input type="password" id="password" placeholder="Contraseña" required
+                            autocomplete="current-password">
+                    </div>
+                    <button type="submit" class="btn-primary">
+                        Ingresar <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                    <p class="login-footer">Sistema Interno v1.0</p>
                 </form>
             </div>
         </div>
-    </div>
+    </section>
 
-    <!-- Main App -->
-    <div class="main-app" id="mainApp">
-        <!-- Sidebar -->
-        <div class="sidebar">
-            <div class="sidebar-logo">
-                <span class="logo-icon">📦</span>
-                <span class="logo-text">LEVO</span>
-            </div>
-            <div class="sidebar-menu">
-                <div class="menu-item active" id="menu-pedidos" onclick="switchModule('pedidos')">
-                    <span class="menu-icon">🛒</span>
-                    <span class="menu-text">Pedidos a Almacen</span>
-                </div>
-                <div class="menu-item" id="menu-pos" onclick="switchModule('pos')">
-                    <span class="menu-icon">🏪</span>
-                    <span class="menu-text">Punto de Venta</span>
-                </div>
-            </div>
-        </div>
+    <!-- MAIN DASHBOARD SHELL (Hidden by default) -->
+    <section id="main-app" class="view">
 
-        <!-- Header -->
-        <div class="app-header">
-            <div class="header-title">📦 Módulo de Pedidos</div>
-
-            <!-- Search Bar Moved to Header -->
-            <div class="search-container"
-                style="flex: 1; margin: 0 40px; background: transparent; padding: 0; position: static; box-shadow: none;">
-                <div class="search-bar-wrapper"
-                    style="box-shadow: none; border: 1px solid #e0e0e0; background: #f8f9fa;">
-                    <span class="search-icon">🔍</span>
-                    <input type="text" id="searchInput" class="search-input-neon"
-                        placeholder="Buscar producto o código...">
-                    <div class="search-actions">
-                        <button class="btn-icon" onclick="openQRScanner()" title="Escanear QR">⚡</button>
-                        <button id="btnSortToggle" class="btn-icon" onclick="toggleSortMode()"
-                            title="Gira: Hoy / A-Z">📋</button>
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <i class="fa-solid fa-cubes-stacked"></i>
+                    <div class="brand-text">
+                        <span class="erp">ERP</span>
+                        <span class="levo">LEVO</span>
                     </div>
                 </div>
             </div>
 
-            <div class="header-right">
-                <div class="user-badge">
-                    <span>👤</span>
-                    <span id="userDisplay"></span>
-                </div>
-                <button class="btn-logout" onclick="logout()">Cerrar Sesión</button>
-            </div>
-        </div>
+            <nav class="nav-menu">
+                <a href="#" class="nav-link active" data-target="dashboard">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>Dashboard</span>
+                </a>
 
-        <!-- Content -->
-        <div class="app-content">
-            <!-- Zone Selector (Jefes) -->
-            <div id="zoneSelectorContainer" class="zone-selector-container"></div>
+                <a href="#" class="nav-link" data-target="movements">
+                    <i class="fa-solid fa-dolly"></i>
+                    <span>Movimientos</span>
+                </a>
 
-            <!-- Search Bar -->
+                <a href="#" class="nav-link" data-target="dispatch">
+                    <i class="fa-solid fa-truck-fast"></i>
+                    <span>Despachos</span>
+                </a>
 
-            <!-- Products Grid -->
-            <div id="productsContainer" class="products-grid"></div>
-        </div>
-    </div>
+                <a href="#" class="nav-link" data-target="prepedidos">
+                    <i class="fa-solid fa-clipboard-list"></i>
+                    <span>Prepedidos</span>
+                </a>
 
-    <!-- Modal QR Scanner -->
-    <div id="qrModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Escanear Código QR</h2>
-                <button class="btn-close" onclick="closeQRScanner()">&times;</button>
-            </div>
-            <div id="qrReader" style="width:100%;"></div>
-            <p style="text-align:center;margin-top:15px;color:#666;">
-                Apunta la cámara al código QR del producto
-            </p>
-        </div>
-    </div>
+                <a href="#" class="nav-link" data-target="envasador">
+                    <i class="fa-solid fa-box-open"></i>
+                    <span>Envasador</span>
+                </a>
 
-    <!-- Modal Seller Selection -->
-    <div id="sellerModal" class="modal" style="z-index: 2500;">
-        <div class="modal-content" style="text-align:center;">
-            <div style="position:relative;">
-                <h2>¿Quién eres?</h2>
-                <button class="btn-icon" onclick="closeSellerModal()"
-                    style="position:absolute; top:-10px; right:0; background:none; color:#666; font-size:1.5em;">✕</button>
-            </div>
-            <div id="sellerList" class="seller-list"
-                style="display:flex; flex-wrap:wrap; justify-content:center; gap:15px; margin:20px 0;">
-                <!-- Sellers injected here -->
-            </div>
-            <div class="new-seller-form" style="margin-top:20px; border-top:1px solid #eee; padding-top:20px;">
-                <p style="margin-bottom:10px; color:#666;">¿No estás en la lista?</p>
-                <div style="display:flex; gap:10px; justify-content:center;">
-                    <input type="text" id="newSellerName" placeholder="Tu nombre"
-                        style="padding:10px; border-radius:8px; border:1px solid #ccc;">
-                    <button class="btn-primary" onclick="startNewSellerSession()">Ingresar</button>
-                </div>
-            </div>
-        </div>
-    </div>
+                <a href="#" class="nav-link" data-target="users" id="nav-users" style="display: none;">
+                    <i class="fa-solid fa-users-gear"></i>
+                    <span>Usuarios</span>
+                </a>
+            </nav>
 
-    <!-- Modal Product Options -->
-    <div id="productOptionsModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modalProductName">Producto</h2>
-                <button class="btn-close" onclick="closeProductOptions()">&times;</button>
-            </div>
-            <div class="product-preview" style="text-align:center; margin-bottom:20px;">
-                <img id="modalProductImage" src="" style="height:150px; object-fit:contain;">
-            </div>
-            <div id="modalPresentations" class="presentation-list">
-                <!-- Options injected here -->
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal Historial -->
-    <div id="historyModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Historial de Solicitudes</h2>
-                <button class="btn-close" onclick="closeHistoryModal()">&times;</button>
-            </div>
-            <div id="historyModalBody" class="history-scroll"></div>
-        </div>
-    </div>
-
-    <!-- Tutorial Modal -->
-    <div class="tutorial-overlay" id="tutorialOverlay"></div>
-    <div class="tutorial-modal" id="tutorialModal">
-        <div class="tutorial-header">
-            <h2>🎓 Guía de Uso</h2>
-            <button class="btn-close" onclick="closeTutorial()">&times;</button>
-        </div>
-        <div class="tutorial-content" id="tutorialContent"></div>
-        <div class="tutorial-dots" id="tutorialDots"></div>
-        <div class="tutorial-nav">
-            <button class="btn-search secondary" onclick="prevTutorial()">← Anterior</button>
-            <button class="btn-search primary" onclick="nextTutorial()">Siguiente →</button>
-        </div>
-    </div>
-
-    <!-- Botón Flotante del Perrito - CORREGIDO DOBLE TAMAÑO -->
-    <a href="https://chat.whatsapp.com/IHlF4Ab31lQH1d0VeEMxQ7?mode=hqrc" target="_blank" class="contact-float"
-        title="¡Comunícanos!">
-        <img src="perrito.png" alt="Comunícanos"
-            onerror="this.onerror=null; this.src='https://raw.githubusercontent.com/Levo19/iMosweb/main/recursos/perrito.png';">
-    </a>
-
-    <!-- Floating Cart POS -->
-    <div id="floatingCart" class="floating-cart-btn" onclick="toggleCart()">
-        <span class="cart-count-badge" id="cartCount">0</span>
-        🛒
-        <!-- Cart Drawer (POS) -->
-        <div class="cart-drawer-overlay" id="cartOverlay" onclick="toggleCart(false)"></div>
-        <div class="cart-drawer" id="cartDrawer">
-            <div class="drawer-header">
-                <h2>🛒 Carrito de Compras</h2>
-                <button class="btn-icon" onclick="toggleCart(false)" style="color:white; font-size:1.5em;">✕</button>
-            </div>
-            <div class="drawer-body" id="cartDrawerBody">
-                <!-- Items injected by JS -->
-            </div>
-            <div class="drawer-footer">
-                <input type="text" class="customer-input" id="posCustomerName"
-                    placeholder="Nombre del Cliente (Opcional)">
-                <div class="ticket-summary">
-                    <div class="summary-row"><span>Items:</span> <span id="cartTotalItems">0</span></div>
-                    <div class="summary-row summary-total"><span>Total:</span> <span id="cartTotalPrice">S/ 0.00</span>
+            <div class="user-profile">
+                <div class="user-info">
+                    <div class="avatar" id="user-avatar-icon"><i class="fa-solid fa-user"></i></div>
+                    <div class="user-details">
+                        <span id="user-name">Usuario</span>
+                        <span id="user-role" class="role-badge">User</span>
                     </div>
                 </div>
-                <button class="btn-primary" style="width:100%; height:50px; font-size:18px;"
-                    onclick="processPOSSale()">✅ Procesar Venta</button>
+                <button id="logout-btn" style="background:none; border:none; color:#999; cursor:pointer;"
+                    title="Cerrar Sesión">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </button>
             </div>
-        </div>
+        </aside>
 
-        <script src="app.js?v=7"></script>
+        <!-- MOBILE SIDEBAR OVERLAY -->
+        <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="content-area">
+
+            <!-- HEADER -->
+            <header class="top-bar">
+                <button id="mobile-menu-btn" class="icon-btn mobile-only">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <h2 id="page-title">Dashboard</h2>
+                <div class="top-actions">
+                    <div id="header-dynamic-actions"></div>
+                    <button class="icon-btn" id="header-notification-bell" style="position:relative;">
+                        <i class="fa-regular fa-bell"></i>
+                        <span id="notification-badge"
+                            style="display:none; position:absolute; top:-2px; right:-2px; background:red; color:white; font-size:0.6rem; padding:2px 4px; border-radius:50%;">0</span>
+                    </button>
+                    <button class="icon-btn"><i class="fa-solid fa-gear"></i></button>
+                </div>
+            </header>
+
+            <!-- VIEWS CONTAINER -->
+            <div class="views-wrapper">
+
+                <!-- DASHBOARD VIEW -->
+                <div id="view-dashboard" class="sub-view active">
+                    <div class="empty-state">
+                        <div class="empty-icon">
+                            <i class="fa-solid fa-chart-simple"></i>
+                        </div>
+                        <h3>Panel de Control</h3>
+                        <p>Bienvenido al sistema LEVO. Seleccione un módulo para comenzar.</p>
+                    </div>
+                </div>
+
+                <!-- MOVEMENTS VIEW (Placeholder) -->
+                <!-- MOVEMENTS VIEW -->
+                <div id="view-movements" class="sub-view">
+                    <!-- REMOVED TABS - MOVED TO HEADER -->
+
+                    <!-- TAB: GUIAS -->
+                    <div id="tab-guias" class="mov-tab-content active">
+                        <div class="action-bar">
+                            <button class="btn-primary" onclick="app.openNewGuiaModal('INGRESO')">
+                                <i class="fa-solid fa-arrow-down"></i> Ingreso
+                            </button>
+                            <button class="btn-secondary" onclick="app.openNewGuiaModal('SALIDA')">
+                                <i class="fa-solid fa-arrow-up"></i> Salida
+                            </button>
+                        </div>
+                        <!-- STATIC GUIAS LAYOUT -->
+                        <div id="guias-layout-wrapper"
+                            style="display:flex; height: calc(100vh - 180px); gap: 1rem; position: relative; overflow: hidden; margin-top: 1rem;">
+
+                            <!-- LEFT COLUMN: LIST -->
+                            <div id="guias-left-col"
+                                style="flex:1; display:flex; flex-direction:column; min-width: 0; transition: all 0.3s ease;">
+                                <!-- Filters -->
+                                <div class="filter-bar"
+                                    style="display:flex; gap:1rem; padding-bottom:1rem; border-bottom:1px solid #eee; margin-bottom:1rem; align-items: center;">
+                                    <div class="search-neon-wrapper" style="flex:1; position: relative;">
+                                        <i class="fa-solid fa-magnifying-glass"
+                                            style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#999;"></i>
+                                        <input type="text" id="guia-filter-text"
+                                            placeholder="Buscar por Proveedor o ID..."
+                                            style="width:100%; padding-left:35px; height:40px; border-radius: 8px; border: 1px solid #ddd;"
+                                            onkeyup="app.filterGuiasList()">
+                                    </div>
+
+                                    <!-- Compact Date Filter -->
+                                    <div class="date-filter-wrapper" title="Filtrar por fecha"
+                                        onclick="this.querySelector('input').showPicker()">
+                                        <i class="fa-regular fa-calendar" style="font-size: 1.2rem;"></i>
+                                        <input type="date" id="guia-filter-date" onchange="app.filterGuiasList()"
+                                            onclick="event.stopPropagation()">
+                                    </div>
+
+                                    <!-- Clear Filter Button -->
+                                    <button class="icon-btn" onclick="app.clearGuiaFilters()" title="Limpiar filtros"
+                                        style="font-size: 1rem;">
+                                        <i class="fa-solid fa-filter-circle-xmark"></i>
+                                    </button>
+                                </div>
+
+                                <!-- Scrollable List -->
+                                <div id="guias-list-scroll" style="flex:1; overflow-y:auto; padding-right:0.5rem;">
+                                    <!-- Content goes here -->
+                                    <div style="text-align:center; padding:2rem; color:#999;">
+                                        <i class="fa-solid fa-spinner fa-spin"></i> Inicializando...
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- RIGHT COLUMN: DETAIL PANEL (Hidden by default) -->
+                            <div id="guia-detail-panel" class="detail-panel"
+                                style="width:0; overflow:hidden; border-left:1px solid #eee; background:white; display:flex; flex-direction:column; transition: width 0.3s ease;">
+                                <!-- Detail Content -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB: PREINGRESOS -->
+                    <div id="tab-preingresos" class="mov-tab-content">
+                        <div class="action-bar">
+                            <button class="btn-primary" onclick="app.openNewPreingresoModal()">
+                                <i class="fa-solid fa-plus"></i> Nuevo Preingreso
+                            </button>
+                        </div>
+
+                        <!-- PREINGRESOS LAYOUT WRAPPER (Mirroring Guias) -->
+                        <div id="preingresos-layout-wrapper"
+                            style="display:flex; height: calc(100vh - 180px); gap: 1rem; position: relative; overflow: hidden; margin-top: 1rem;">
+
+                            <!-- LEFT COLUMN: LIST -->
+                            <div id="preingresos-left-col"
+                                style="flex:1; display:flex; flex-direction:column; min-width: 0; transition: all 0.3s ease;">
+
+                                <!-- Filters -->
+                                <div class="filter-bar"
+                                    style="display:flex; gap:1rem; padding-bottom:1rem; border-bottom:1px solid #eee; margin-bottom:1rem; align-items: center;">
+                                    <div class="search-neon-wrapper" style="flex:1; position: relative;">
+                                        <i class="fa-solid fa-magnifying-glass"
+                                            style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#999;"></i>
+                                        <input type="text" id="preingreso-filter-text"
+                                            placeholder="Buscar por Proveedor..."
+                                            style="width:100%; padding-left:35px; height:40px; border-radius: 8px; border: 1px solid #ddd;"
+                                            onkeyup="app.filterPreingresosList()">
+                                    </div>
+
+                                    <!-- Compact Date Filter -->
+                                    <div class="date-filter-wrapper" title="Filtrar por fecha"
+                                        onclick="this.querySelector('input').showPicker()">
+                                        <i class="fa-regular fa-calendar" style="font-size: 1.2rem;"></i>
+                                        <input type="date" id="preingreso-filter-date"
+                                            onchange="app.filterPreingresosList()" onclick="event.stopPropagation()">
+                                    </div>
+
+                                    <!-- Clear Filter Button -->
+                                    <button class="icon-btn" onclick="app.clearPreingresoFilters()"
+                                        title="Limpiar filtros" style="font-size: 1rem;">
+                                        <i class="fa-solid fa-filter-circle-xmark"></i>
+                                    </button>
+                                </div>
+
+                                <!-- Scrollable List -->
+                                <div id="preingresos-list-scroll"
+                                    style="flex:1; overflow-y:auto; padding-right:0.5rem;">
+                                    <div style="text-align:center; padding:2rem; color:#999;">
+                                        <i class="fa-solid fa-spinner fa-spin"></i> Cargando preingresos...
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- RIGHT COLUMN: DETAIL PANEL -->
+                            <div id="preingreso-detail-panel" class="detail-panel"
+                                style="width:0; overflow:hidden; border-left:1px solid #eee; background:white; display:flex; flex-direction:column; transition: width 0.3s ease;">
+                                <!-- Detail Content -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DISPATCH VIEW -->
+                <div id="view-dispatch" class="sub-view">
+                    <!-- Header Removed as per user request -->
+                    <div id="dispatch-content">
+                        <!-- Dynamic Content Loads Here -->
+                    </div> <!-- Content injected via JS -->
+                </div>
+
+                <!-- PREPEDIDOS VIEW -->
+                <div id="view-prepedidos" class="sub-view">
+                    <div id="prepedidos-container"
+                        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; padding: 1.5rem;">
+                        <!-- Provider Cards injected here -->
+                        <div style="text-align:center; grid-column: 1/-1; color:#666;">
+                            <i class="fa-solid fa-circle-notch fa-spin"></i> Cargando proveedores...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ENVASADOR VIEW -->
+                <div id="view-envasador" class="sub-view">
+                    <div style="position: relative; height: calc(100vh - 140px); overflow: hidden;">
+                        <!-- HEADER SEARCH (Injected via JS) -->
+
+                        <!-- MAIN LIST CONTAINER -->
+                        <div id="packing-list-container" class="packing-list-container">
+                            <div style="text-align:center; padding:2rem; color:#999;">
+                                <i class="fa-solid fa-spinner fa-spin"></i> Cargando lista de envasado...
+                            </div>
+                        </div>
+
+                        <!-- SIDE DRAWER (Quick View) -->
+                        <div id="packing-drawer-backdrop" class="drawer-backdrop"></div>
+                        <div id="packing-drawer" class="packing-drawer">
+                            <!-- Drawer Content injected via JS -->
+                        </div>
+                    </div>
+                </div>
+        </main>
+    </section>
+
+    <!-- Load Scripts -->
+    <script src="code_gs_partial.js?v=31"></script>
+    <script src="app.js?v=999"></script>
 </body>
 
 </html>
